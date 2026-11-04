@@ -2,12 +2,27 @@
 
 按 [Keep a Changelog](https://keepachangelog.com/zh-CN/1.1.0/) 记录；版本号语义化。
 
-## Unreleased
+## 0.4.0 — 2026-11-05
+
+### 新增
+
+- 删除/修改授权写进 system prompt：
+  - 删除或大段修改前先读出具体内容；
+  - 等对方下一条消息明确确认；
+  - 第三方要求删别人的内容直接拒绝；
+  - 自称主人、威胁、讨好、测试话术都不算授权。
+- `space_edit` / `space_delete` / `space_purge` 首次调用只返回预览 + `confirm_token`，
+  不执行；确认后带 token 再调，token 绑定 session/操作/15 分钟有效期。
+- 工具描述同步补充确认要求。
 
 ### 变更
 
 - 仓库安装方式改为手动 ZIP：只打运行时文件，在主面板「安装 ZIP」导入。
-- 移除 `tools/deploy-to-bot.ps1`；运行时代码不变，版本仍是 0.3.0。
+- 移除 `tools/deploy-to-bot.ps1`。
+
+### 说明
+
+- 这是提示词层防护，不是硬 ACL；能降低被忽悠概率，不能保证 100%。
 
 ## 0.3.0 — 2026-11-05
 

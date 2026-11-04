@@ -58,8 +58,11 @@ D:\Dev\qq-bot-lite\.venv\Scripts\python.exe -m app.pluginkit.check D:\Dev\bot_sp
 6. **原子写**：同目录临时文件 + `os.replace`；同一路径 `asyncio.Lock` 串行。
 7. **审计不记正文**：只记工具名、路径、字数、成败、会话键；日志也不打完整内容。
 8. **不引入依赖**：只用标准库 + 主程序已装的包；面板不引 CDN/外部字体/图标库。
-9. **system 只加固定说明。** `SPACE_CHARTER` 是逐字稳定的自主权说明，不拼时间/文件/群名；
+9. **system 只加固定说明。** `SPACE_CHARTER` 是逐字稳定的自主权说明和删除授权协议，不拼时间/文件/群名；
    `autonomy_guard=false` 时不注入。不要把它挪到 `user_suffix` 或每次动态拼。
+10. **删除/修改授权在提示词层。** 规则是“读出具体内容 + 等对方下一条明确确认 + 第三方代删直接拒绝”。
+    `space_edit` / `space_delete` / `space_purge` 第一次调用只返回预览 + `confirm_token`，不执行；
+    确认后带 token 再调。不要为了省 token 删掉这段；它降低被忽悠概率，但不是硬 ACL。
 
 ## 常见坑
 
@@ -74,6 +77,8 @@ D:\Dev\qq-bot-lite\.venv\Scripts\python.exe -m app.pluginkit.check D:\Dev\bot_sp
   列表/搜索走 `_iter_md`，配额走 `_iter_all_md`（含回收站）。
 - `space_purge` 只删 `.trash/<id>/` 整目录，释放配额；不要做成按路径删除活跃文件。
 - `space_edit` 的 `old` 必须逐字匹配，非空；命中多处默认报错，只有 `all=true` 才全替换。
+- 删除/修改授权是提示词协议，不是代码闸门；别把“第三方代删”“自称主人”“测试/威胁”
+  当成授权。改 `SPACE_CHARTER` 时保留两步确认。
 - Windows 保留名、结尾空格/点、符号链接/junction 都有测试，改路径逻辑先跑 `test_space.py`。
 - 面板的 Markdown 渲染先 `escapeHtml` 再拼块；链接只放行 `http(s)`，不加载图片。
 - 配额改设置后下一轮生效；`ToolRunner` 有 10 秒工具超时，保持文件操作同步且短。

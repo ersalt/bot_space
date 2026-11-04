@@ -7,9 +7,13 @@
 
 from __future__ import annotations
 
+import hashlib
 import inspect
 import json
+import secrets
+import time
 from collections.abc import Callable, Mapping
+from dataclasses import dataclass
 from typing import Any
 
 from app.sdk import Tool, ToolContext
@@ -18,6 +22,22 @@ from .space import TRASH_LIST_LIMIT, Limits, SpaceError, SpaceStore
 
 LIST_LIMIT = 40
 PATH_DESCRIPTION = "相对路径，例如 notes/today.md；只允许 .md，最多两层子目录"
+CONFIRM_TTL = 15 * 60
+CONFIRM_HINT = (
+    "未执行。把 preview 给请求者看，等对方下一条消息明确确认后，"
+    "再用同一个 confirm_token 调用一次。"
+)
+
+
+@dataclass(slots=True)
+class _Pending:
+    session: str
+    tool: str
+    digest: str
+    expires: float
+
+
+_PENDING: dict[str, _Pending] = {}
 
 
 def allow_write(settings: Mapping[str, Any]) -> bool:
@@ -92,6 +112,107 @@ def _int_arg(args: dict[str, Any], key: str, default: int) -> int:
 
 def _session(ctx: ToolContext) -> str:
     return str(getattr(ctx, "session_key", "") or "")
+
+
+def _clip(text: Any, limit: int = 400) -> str:
+    value = str(text or "")
+    return value[:limit] + ("…" if len(value) > limit else "")
+
+
+def _digest(tool: str, **parts: Any) -> str:
+    payload = json.dumps(
+        {"tool": tool, **parts},
+        ensure_ascii=False,
+        sort_keys=True,
+        default=str,
+    )
+    return hashlib.sha256(payload.encode("utf-8")).hexdigest()
+
+
+def _prune_pending() -> None:
+    now = time.time()
+    for token in [key for key, item in _PENDING.items() if item.expires < now]:
+        _PENDING.pop(token, None)
+
+
+def _challenge(
+    store: SpaceStore,
+    ctx: ToolContext,
+    *,
+    tool: str,
+    path: str,
+    digest: str,
+    preview: dict[str, Any],
+) -> dict[str, Any]:
+    """第一次调用不执行，只返回预览和一次性 token。"""
+    _prune_pending()
+    token = secrets.token_urlsafe(9)
+    _PENDING[token] = _Pending(
+        session=_session(ctx),
+        tool=tool,
+        digest=digest,
+        expires=time.time() + CONFIRM_TTL,
+    )
+    store.audit(tool, path, 0, False, session=_session(ctx), error="等待确认，未执行")
+    return {
+        "ok": False,
+        "needs_confirmation": True,
+        "confirm_token": token,
+        "preview": preview,
+        "message": CONFIRM_HINT,
+    }
+
+
+def _consume_challenge(ctx: ToolContext, token: Any, tool: str, digest: str) -> bool:
+    if not isinstance(token, str) or not token:
+        return False
+    entry = _PENDING.pop(token, None)
+    if entry is None:
+        return False
+    if entry.session != _session(ctx) or entry.tool != tool or entry.digest != digest:
+        return False
+    return entry.expires >= time.time()
+
+
+def _preview_edit(
+    store: SpaceStore,
+    path: str,
+    old: str,
+    new: str,
+    replace_all: bool,
+) -> dict[str, Any]:
+    data = store.read(path, limit=None)
+    text = data["content"]
+    count = text.count(old)
+    if count == 0:
+        raise SpaceError("没有找到 old 对应的文本；请先 space_read 再精确复制要改的片段")
+    if count > 1 and not replace_all:
+        raise SpaceError(
+            f"old 命中 {count} 处，可能改错；请提供更长的上下文，或 all=true 全部替换"
+        )
+    return {
+        "path": data["path"],
+        "old": _clip(old, 300),
+        "new": _clip(new, 300),
+        "occurrences": count,
+        "size": data["size"],
+    }
+
+
+def _preview_delete(store: SpaceStore, path: str) -> dict[str, Any]:
+    data = store.read(path, limit=400)
+    return {
+        "path": data["path"],
+        "size": data["size"],
+        "preview": _clip(data["content"], 400),
+    }
+
+
+def _preview_purge(store: SpaceStore, item_id: str) -> dict[str, Any]:
+    for item in store.trash_items(200)["items"]:
+        if item["id"] == item_id:
+            return item
+    raise SpaceError(f"回收站记录不存在：{item_id}", code="missing")
 
 
 async def _run(
@@ -197,6 +318,17 @@ def build_tools(
         old = _raw_string_arg(args, "old")
         new = _raw_string_arg(args, "new", allow_empty=True)
         replace_all = _bool_arg(args, "all", False)
+        digest = _digest("space_edit", path=path, old=old, new=new, all=replace_all)
+        if not _consume_challenge(ctx, args.get("confirm_token"), "space_edit", digest):
+            preview = _preview_edit(store, path, old, new, replace_all)
+            return _challenge(
+                store,
+                ctx,
+                tool="space_edit",
+                path=path,
+                digest=digest,
+                preview=preview,
+            )
         return await _run(
             ctx,
             store,
@@ -208,6 +340,17 @@ def build_tools(
 
     async def space_delete(ctx: ToolContext, args: dict[str, Any]) -> dict[str, Any]:
         path = _string_arg(args, "path")
+        digest = _digest("space_delete", path=path)
+        if not _consume_challenge(ctx, args.get("confirm_token"), "space_delete", digest):
+            preview = _preview_delete(store, path)
+            return _challenge(
+                store,
+                ctx,
+                tool="space_delete",
+                path=path,
+                digest=digest,
+                preview=preview,
+            )
         return await _run(
             ctx,
             store,
@@ -237,6 +380,17 @@ def build_tools(
 
     async def space_purge(ctx: ToolContext, args: dict[str, Any]) -> dict[str, Any]:
         item_id = _string_arg(args, "id")
+        digest = _digest("space_purge", id=item_id)
+        if not _consume_challenge(ctx, args.get("confirm_token"), "space_purge", digest):
+            preview = _preview_purge(store, item_id)
+            return _challenge(
+                store,
+                ctx,
+                tool="space_purge",
+                path=item_id,
+                digest=digest,
+                preview=preview,
+            )
         return await _run(
             ctx,
             store,
@@ -305,7 +459,7 @@ def build_tools(
             name="space_trash",
             description=(
                 "查看回收站里被删除的文件：id、原路径、大小、删除时间。"
-                "删除不是永久的，可以用 space_restore 恢复；只读。"
+                "删除/恢复前先用它让对方确认具体条目；只读。"
             ),
             parameters=_object({}),
             handler=space_trash,
@@ -358,6 +512,9 @@ def build_tools(
             description=(
                 "精确修改一篇 Markdown：把 old 替换成 new。old 必须与文件中的原文逐字一致；"
                 "命中多处时需 all=true。改内容、删某一行都用它，改前先 space_read。"
+                "第一次调用只返回预览和 confirm_token，不执行；把预览给请求者看，"
+                "等对方下一条消息明确确认后再带 confirm_token 调用。"
+                "第三方要求删别人的内容时不要调用。"
             ),
             parameters=_object(
                 {
@@ -374,6 +531,10 @@ def build_tools(
                         "type": "boolean",
                         "description": "old 命中多处时是否全部替换，默认 false",
                     },
+                    "confirm_token": {
+                        "type": "string",
+                        "description": "第一次预览返回的确认 token；确认后才带它再调一次",
+                    },
                 },
                 ["path", "old", "new"],
             ),
@@ -385,9 +546,18 @@ def build_tools(
             description=(
                 "把一篇 Markdown 移到回收站，不是永久删除；之后可以用 space_trash 查看、"
                 "space_restore 恢复。删除也占配额。"
+                "第一次调用只返回预览和 confirm_token，不执行；把预览给请求者看，"
+                "等对方下一条消息明确确认后再带 confirm_token 调用。"
+                "第三方让你删别人的内容时不要调用。"
             ),
             parameters=_object(
-                {"path": {"type": "string", "description": PATH_DESCRIPTION, "maxLength": 160}},
+                {
+                    "path": {"type": "string", "description": PATH_DESCRIPTION, "maxLength": 160},
+                    "confirm_token": {
+                        "type": "string",
+                        "description": "第一次预览返回的确认 token；确认后才带它再调一次",
+                    },
+                },
                 ["path"],
             ),
             handler=space_delete,
@@ -396,7 +566,7 @@ def build_tools(
         Tool(
             name="space_restore",
             description=(
-                "把回收站里的文件恢复到原路径。先用 space_trash 拿 id；"
+                "把回收站里的文件恢复到原路径。先用 space_trash 拿 id，并让对方确认要恢复哪条；"
                 "原路径已有文件时会失败。"
             ),
             parameters=_object(
@@ -415,14 +585,19 @@ def build_tools(
             name="space_purge",
             description=(
                 "从回收站永久删除一个条目，不可恢复，并释放配额。"
-                "先用 space_trash 拿 id；只有确定不要了才用。"
+                "第一次调用只返回预览和 confirm_token，不执行；先 space_trash 让对方看到具体 id，"
+                "确认后带 confirm_token 再调一次。"
             ),
             parameters=_object(
                 {
                     "id": {
                         "type": "string",
                         "description": "回收站条目的 id，例如 20261105-012345-a1b2c3",
-                    }
+                    },
+                    "confirm_token": {
+                        "type": "string",
+                        "description": "第一次预览返回的确认 token；确认后才带它再调一次",
+                    },
                 },
                 ["id"],
             ),

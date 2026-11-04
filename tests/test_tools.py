@@ -37,6 +37,13 @@ def _names(tools) -> list[str]:
     return [item.name for item in tools]
 
 
+async def _confirmed(tool, ctx, args: dict) -> dict:
+    first = await tool.handler(ctx, args)
+    assert first["needs_confirmation"] is True
+    assert first["confirm_token"]
+    return await tool.handler(ctx, {**args, "confirm_token": first["confirm_token"]})
+
+
 def test_read_tools_always_present(store: SpaceStore) -> None:
     tools = build_tools(store, lambda: {})
     assert _names(tools) == [
@@ -110,14 +117,18 @@ async def test_edit_delete_trash_restore_tools(store: SpaceStore) -> None:
         ctx, {"path": "notes/list.md", "text": "1. 贰叔\n2. 饺子"}
     )
 
-    edited = await _tool(tools, "space_edit").handler(
-        ctx, {"path": "notes/list.md", "old": "2. 饺子\n", "new": ""}
+    edited = await _confirmed(
+        _tool(tools, "space_edit"),
+        ctx,
+        {"path": "notes/list.md", "old": "2. 饺子\n", "new": ""},
     )
     assert edited["replaced"] == 1
     read = await _tool(tools, "space_read").handler(ctx, {"path": "notes/list.md"})
     assert read["content"] == "1. 贰叔\n"
 
-    deleted = await _tool(tools, "space_delete").handler(ctx, {"path": "notes/list.md"})
+    deleted = await _confirmed(
+        _tool(tools, "space_delete"), ctx, {"path": "notes/list.md"}
+    )
     assert deleted["restorable"] is True
     assert store.list_files()["total"] == 0
 
@@ -132,9 +143,13 @@ async def test_edit_delete_trash_restore_tools(store: SpaceStore) -> None:
     assert read["content"] == "1. 贰叔\n"
     assert any(item["tool"] == "space_restore" for item in store.recent_audit(10))
 
-    await _tool(tools, "space_delete").handler(ctx, {"path": "notes/list.md"})
+    await _confirmed(
+        _tool(tools, "space_delete"), ctx, {"path": "notes/list.md"}
+    )
     trash = await _tool(tools, "space_trash").handler(ctx, {})
-    purged = await _tool(tools, "space_purge").handler(ctx, {"id": trash["items"][0]["id"]})
+    purged = await _confirmed(
+        _tool(tools, "space_purge"), ctx, {"id": trash["items"][0]["id"]}
+    )
     assert purged["purged"] is True
     assert store.trash_items()["total"] == 0
 
@@ -147,11 +162,50 @@ async def test_edit_requires_unique_match(store: SpaceStore) -> None:
         await _tool(tools, "space_edit").handler(
             _ctx(), {"path": "a.md", "old": "同一行", "new": "改"}
         )
-    result = await _tool(tools, "space_edit").handler(
-        _ctx(), {"path": "a.md", "old": "同一行", "new": "改", "all": True}
+    result = await _confirmed(
+        _tool(tools, "space_edit"),
+        _ctx(),
+        {"path": "a.md", "old": "同一行", "new": "改", "all": True},
     )
     assert result["replaced"] == 2
     assert store.read("a.md")["content"] == "改\n改\n"
+
+
+@pytest.mark.asyncio
+async def test_delete_requires_confirmation(store: SpaceStore) -> None:
+    tools = build_tools(store, lambda: {})
+    ctx = _ctx()
+    await store.create("a.md", "保留内容", store_limits())
+
+    first = await _tool(tools, "space_delete").handler(ctx, {"path": "a.md"})
+    assert first["needs_confirmation"] is True
+    assert first["confirm_token"]
+    assert first["preview"]["path"] == "a.md"
+    assert "保留内容" in first["preview"]["preview"]
+    assert store.read("a.md")["content"] == "保留内容"
+
+    # token 绑定 session：别人的 token 不能执行
+    other = _ctx("private:2")
+    second = await _tool(tools, "space_delete").handler(
+        other, {"path": "a.md", "confirm_token": first["confirm_token"]}
+    )
+    assert second["needs_confirmation"] is True
+    assert store.read("a.md")["content"] == "保留内容"
+
+    # 同一 session 重新预览并确认，才真正删除
+    third = await _tool(tools, "space_delete").handler(ctx, {"path": "a.md"})
+    done = await _tool(tools, "space_delete").handler(
+        ctx, {"path": "a.md", "confirm_token": third["confirm_token"]}
+    )
+    assert done["restorable"] is True
+    assert not (store.root / "a.md").exists()
+
+    # token 不能复用
+    await store.create("b.md", "另一篇", store_limits())
+    reused = await _tool(tools, "space_delete").handler(
+        ctx, {"path": "b.md", "confirm_token": third["confirm_token"]}
+    )
+    assert reused["needs_confirmation"] is True
 
 
 @pytest.mark.asyncio
@@ -260,9 +314,11 @@ def test_schemas_are_openai_functions(store: SpaceStore) -> None:
     edit = _tool(tools, "space_edit")
     assert edit.parameters["required"] == ["path", "old", "new"]
     assert edit.read_only is False
+    assert "确认" in edit.description
     delete = _tool(tools, "space_delete")
     assert delete.parameters["required"] == ["path"]
     assert delete.read_only is False
+    assert "第三方" in delete.description
     restore = _tool(tools, "space_restore")
     assert restore.parameters["required"] == ["id"]
     assert restore.read_only is False
