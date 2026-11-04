@@ -1,26 +1,49 @@
-# bot_space
+# bot 手记（bot_space）
 
-qq-bot-lite 的插件：**bot 的私人 Markdown 空间**。
+qq-bot-lite 的插件：**bot 手记**。bot 自己写、用户只读的 Markdown 手记。
 
 模型在私聊里自己决定要不要记、记什么；用户只能在插件面板里只读查看。
 没有 `/space` 命令，没有编辑按钮，也没有「让 bot 写一条」的触发。
 
 - 插件接口：`api = 2`（需要 qq-bot-lite 的原生工具协议，>= 0.2.0）
-- 当前版本：`0.1.0`
+- 当前版本：`0.1.1`
 - 设计交接：[docs/bot-space.md](docs/bot-space.md)
 - 部署副本：`D:\Dev\qq-bot-lite\plugins\bot_space`，不要直接改副本
 
 ---
 
-## 1. 它给模型什么
+## 1. bot 现在能做什么
+
+在私聊里，bot 可以这样用手记（部署并在主面板启用后生效）：
+
+- **翻手记**：先 `space_list` 看有哪些文件、标题、大小和修改时间，再决定读哪篇；
+- **读一篇**：`space_read` 读取 Markdown 原文，长文用 `offset` 分页；
+- **找旧内容**：`space_search` 搜关键词，返回路径、行号和匹配行；
+- **新建**：`space_create` 开一篇新笔记；同名已存在会失败，不会覆盖；
+- **追加**（最常用）：`space_append` 往 `notes/todo.md` 或 `journal/2026-11-05.md`
+  里接着写，文件不存在会自动新建。
+
+典型场景：
+
+- 你说「记一下周六要买猫粮」，它可能写进 `notes/todo.md`；
+- 聊到一段值得留的记录，它可能自己追加到当天 journal；
+- 你问「上次记的那个方案呢」，它可能先搜、再读对应文件。
+
+**是否调用、写什么、写哪里，都由模型自己判断**；插件不追问、不自动补写，也不主动发 QQ。
+
+目前**不能**：删除、覆盖、重命名、移动、读非 `.md` 文件、读任意目录、执行 shell、联网。
+
+---
+
+## 2. 它给模型什么
 
 五个工具，工具名统一 `space_` 前缀：
 
 | 工具 | 作用 | 只读 |
 |---|---|---|
-| `space_list` | 列出文件：路径、标题、大小、修改时间 | 是 |
+| `space_list` | 列出文件：路径、标题、大小、修改时间（最多 40 条） | 是 |
 | `space_read` | 读一篇 `.md`，单次有字数上限，可用 `offset` 续读 | 是 |
-| `space_search` | 全空间关键词搜索，返回路径、行号、匹配行 | 是 |
+| `space_search` | 全部手记关键词搜索，返回路径、行号、匹配行 | 是 |
 | `space_create` | 新建 `.md`；已存在直接失败，不覆盖 | 否 |
 | `space_append` | 追加内容；文件不存在则新建 | 否 |
 
@@ -32,7 +55,7 @@ qq-bot-lite 的插件：**bot 的私人 Markdown 空间**。
 
 ---
 
-## 2. 安装
+## 3. 安装
 
 开发仓库在 `D:\Dev\bot_space`，机器人实际加载的是部署副本：
 
@@ -49,22 +72,22 @@ powershell -ExecutionPolicy Bypass -File tools\deploy-to-bot.ps1 -DryRun
 
 然后到主面板「插件」页：
 
-1. 找到 **bot_space**，点开关启用（默认关闭）；
-2. 点「打开面板」查看空间；
+1. 找到 **bot 手记**（id 是 `bot_space`），点开关启用（默认关闭）；
+2. 点「打开面板」查看手记；
 3. 如果之前已启用、只是更新了代码，点「重载」即可，不用重启机器人。
 
 装完默认不启用：是否让模型拥有这个能力，由使用者决定。
 
 ---
 
-## 3. 设置
+## 4. 设置
 
 | 键 | 默认 | 说明 |
 |---|---|---|
 | `allow_write` | `true` | 关掉后模型只剩 list/read/search，schema 里不再有写工具 |
 | `max_file_kb` | `64` | 单文件上限；追加超限返回明确错误 |
 | `max_files` | `200` | 文件总数上限 |
-| `max_total_mb` | `10` | 空间总量上限 |
+| `max_total_mb` | `10` | 手记总量上限 |
 | `read_chars` | `6000` | `space_read` 单次返回字数，超出用 `offset` 续读 |
 | `search_hits` | `5` | `space_search` 单次最多返回几条 |
 
@@ -73,7 +96,7 @@ powershell -ExecutionPolicy Bypass -File tools\deploy-to-bot.ps1 -DryRun
 
 ---
 
-## 4. 数据
+## 5. 数据
 
 ```
 data/plugin_data/bot_space/
@@ -85,14 +108,14 @@ data/plugin_data/bot_space/
 ```
 
 - 根目录固定为 `ctx.data_dir / "space"`，不接受配置任意绝对路径。
-- 删除插件时勾选「连持久化数据一起删」，空间和审计一起清空。
+- 删除插件时勾选「连持久化数据一起删」，手记和审计一起清空。
 - 审计只记：时间、工具名、路径、字数、成败、会话键；失败时加一条错误摘要。
   不记录 Markdown 正文。
 - 审计文件超过 2MB 会自动保留最近 1000 行。
 
 ---
 
-## 5. 面板
+## 6. 面板
 
 地址：`/plugins/bot_space/`
 
@@ -114,7 +137,7 @@ data/plugin_data/bot_space/
 
 ---
 
-## 6. 路径与配额规则
+## 7. 手记的路径与配额规则
 
 路径必须由模型传相对路径，例如 `notes/today.md`：
 
@@ -127,13 +150,13 @@ data/plugin_data/bot_space/
 
 配额：
 
-- 单文件 64KB（可配）、文件数 200、总量 10MB（可配）；
+- 单文件 64KB（可配）、文件数 200、手记总量 10MB（可配）；
 - 超限抛 `SpaceError`，由宿主 ToolRunner 转成 `{"ok": false, "error": "..."}` 回给模型，
   不打断聊天。
 
 ---
 
-## 7. 开发与测试
+## 8. 开发与测试
 
 用主程序同一个 venv（插件只依赖主程序已装的包 + 标准库）：
 
@@ -165,7 +188,7 @@ CI 在 `.github/workflows/ci.yml`：Ubuntu/Windows × Python 3.12/3.13，跑 ruf
 
 ---
 
-## 8. 安全边界
+## 9. 安全边界
 
 - 这是**目录约束**，不是 OS 沙箱：插件仍是进程内受信代码，和机器人同权限。
 - 固定根目录 + 路径清洗是为了防止模型误伤项目其他文件，不是多租户隔离。
@@ -175,7 +198,7 @@ CI 在 `.github/workflows/ci.yml`：Ubuntu/Windows × Python 3.12/3.13，跑 ruf
 
 ---
 
-## 9. 兼容性
+## 10. 兼容性
 
 - `api = 2`；宿主只加载 `api <= 2` 的插件。
 - 需要 qq-bot-lite 的原生工具协议（`app/sdk.py` 的 `Tool`/`ToolContext`、
@@ -184,6 +207,6 @@ CI 在 `.github/workflows/ci.yml`：Ubuntu/Windows × Python 3.12/3.13，跑 ruf
 
 ---
 
-## 10. 许可
+## 11. 许可
 
 MIT，见 [LICENSE](LICENSE)。

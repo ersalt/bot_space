@@ -2,6 +2,14 @@
 
 按 [Keep a Changelog](https://keepachangelog.com/zh-CN/1.1.0/) 记录；版本号语义化。
 
+## 0.1.1 — 2026-11-05
+
+### 变更
+
+- 插件显示名从「私人空间」改为「bot 手记」；id、URL、数据路径仍是 `bot_space`。
+- 面板、工具描述、日志、README 同步改名。
+- `max_total_mb` 设置标签改为「手记总量上限」。
+
 ## 0.1.0 — 2026-11-05
 
 ### 新增

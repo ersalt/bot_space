@@ -177,7 +177,7 @@ def build_tools(
         Tool(
             name="space_list",
             description=(
-                "列出 bot 私人空间里的 Markdown 文件：路径、标题、大小、修改时间。"
+                "列出 bot 手记里的 Markdown 文件：路径、标题、大小、修改时间。"
                 "不确定有哪些笔记、或要确认路径时先调用它；只读，最多返回 40 条。"
             ),
             parameters=_object(
@@ -194,7 +194,7 @@ def build_tools(
         Tool(
             name="space_read",
             description=(
-                "读取私人空间里的一篇 Markdown。默认从头读，单次最多返回配置的字数，"
+                "读取手记里的一篇 Markdown。默认从头读，单次最多返回配置的字数，"
                 "被截断时用 offset 继续读；只读。"
             ),
             parameters=_object(
@@ -213,7 +213,7 @@ def build_tools(
         Tool(
             name="space_search",
             description=(
-                "在私人空间的所有 Markdown 里按关键词搜索（不区分大小写），"
+                "在手记的所有 Markdown 里按关键词搜索（不区分大小写），"
                 "返回路径、行号和匹配行。找以前记过什么时用；只读。"
             ),
             parameters=_object(
@@ -237,7 +237,7 @@ def build_tools(
         Tool(
             name="space_create",
             description=(
-                "在私人空间新建一篇 Markdown。已存在会失败，不会覆盖；"
+                "在手记新建一篇 Markdown。已存在会失败，不会覆盖；"
                 "要补充已有文件请用 space_append。"
             ),
             parameters=_object(
@@ -256,7 +256,7 @@ def build_tools(
         Tool(
             name="space_append",
             description=(
-                "向私人空间的 Markdown 追加内容；文件不存在会自动新建。"
+                "向手记的 Markdown 追加内容；文件不存在会自动新建。"
                 "记笔记、写日记优先用这个。"
             ),
             parameters=_object(

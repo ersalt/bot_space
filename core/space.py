@@ -54,7 +54,7 @@ _HEADING = re.compile(r"^#{1,6}\s+")
 
 
 class SpaceError(ValueError):
-    """空间操作失败；ToolRunner 会把它转成 `ok: false` 回给模型。"""
+    """手记操作失败；ToolRunner 会把它转成 `ok: false` 回给模型。"""
 
     def __init__(self, message: str, *, code: str = "invalid") -> None:
         super().__init__(message)
@@ -242,7 +242,7 @@ class Limits:
 
 
 class SpaceStore:
-    """固定根目录下的 Markdown 空间。所有路径参数都先过 `normalize_*`。"""
+    """固定根目录下的 Markdown 手记。所有路径参数都先过 `normalize_*`。"""
 
     def __init__(self, root: Path, *, log: Any = None) -> None:
         self.root = Path(root)
@@ -259,7 +259,7 @@ class SpaceStore:
             self.root.mkdir(parents=True, exist_ok=True)
             self.root = self.root.resolve()
         except OSError as exc:
-            raise SpaceError(f"空间目录不可用：{exc}") from exc
+            raise SpaceError(f"手记目录不可用：{exc}") from exc
         self._prepared = True
 
     def _ready(self) -> Path:
@@ -390,7 +390,7 @@ class SpaceStore:
         if projected_bytes > limits.max_total_bytes:
             limit_mb = limits.max_total_bytes // 1048576
             raise SpaceError(
-                f"空间总量最多 {limit_mb}MB，已经用满；"
+                f"手记总量最多 {limit_mb}MB，已经用满；"
                 "需要用户清理数据或调大配额"
             )
 

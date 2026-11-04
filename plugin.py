@@ -1,4 +1,4 @@
-"""bot_space：bot 的私人 Markdown 空间（qq-bot-lite api=2 插件入口）。
+"""bot_space：bot 的 Markdown 手记（qq-bot-lite api=2 插件入口）。
 
 只做三件事：
 
@@ -20,7 +20,7 @@ from fastapi.responses import JSONResponse
 from .core.space import Limits, SpaceError, SpaceStore
 from .core.tools import allow_write, build_tools
 
-VERSION = "0.1.0"
+VERSION = "0.1.1"
 SPACE_LABEL = "data/plugin_data/bot_space/space"
 
 router = APIRouter()
@@ -115,7 +115,7 @@ class BotSpace(Extension):
     async def on_start(self) -> None:
         if _STORE is not None:
             mode = "可写" if allow_write(_settings()) else "只读"
-            self.ctx.log.info("私人空间就绪（%s，模型%s）", SPACE_LABEL, mode)
+            self.ctx.log.info("手记就绪（%s，模型%s）", SPACE_LABEL, mode)
 
 
 def setup(ctx: PluginContext) -> BotSpace:
@@ -123,15 +123,15 @@ def setup(ctx: PluginContext) -> BotSpace:
     _CONTEXT = ctx
     _STORE = None
     if ctx.data_dir is None:
-        ctx.log.warning("宿主没有提供 data_dir，空间工具不会启用")
+        ctx.log.warning("宿主没有提供 data_dir，手记工具不会启用")
         return BotSpace()
 
     store = SpaceStore(Path(ctx.data_dir) / "space", log=ctx.log)
     try:
         store.ensure()
     except SpaceError as exc:
-        ctx.log.error("私人空间初始化失败：%s", exc)
+        ctx.log.error("手记初始化失败：%s", exc)
     else:
         _STORE = store
-        ctx.log.info("私人空间根目录：%s", SPACE_LABEL)
+        ctx.log.info("手记根目录：%s", SPACE_LABEL)
     return BotSpace()

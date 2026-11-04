@@ -1,11 +1,12 @@
-# AGENTS.md · bot_space
+# AGENTS.md · bot_space（bot 手记）
 
 给接手这个仓库的 AI / 新同事看的。先读 **README.md** 和 **docs/bot-space.md**，再动代码。
 
 ## 这是什么
 
-qq-bot-lite 的独立插件仓库：bot 的私人 Markdown 空间。插件只给模型工具，不给用户命令；
-面板只读。部署副本在 `D:\Dev\qq-bot-lite\plugins\bot_space`，**不要直接改副本**。
+qq-bot-lite 的独立插件仓库：**bot 手记**（id `bot_space`），bot 自己写、用户只读的
+Markdown 手记。插件只给模型工具，不给用户命令；面板只读。部署副本在
+`D:\Dev\qq-bot-lite\plugins\bot_space`，**不要直接改副本**。
 
 **硬性规则：本工作区只改插件源码，不修改主项目、不部署、不启用插件。**
 部署/更新由用户手动运行 `tools/deploy-to-bot.ps1` 并在主面板操作。
@@ -46,7 +47,7 @@ powershell -ExecutionPolicy Bypass -File tools\deploy-to-bot.ps1
 
 ## 不能碰的设计
 
-1. **没有用户命令。** 不导出 `COMMANDS`，不打 `/space`。空间是 bot 的，写不写由模型决定。
+1. **没有用户命令。** 不导出 `COMMANDS`，不打 `/space`。手记是 bot 的，写不写由模型决定。
 2. **没有 delete/overwrite/rename/move。** 模型只能 list/read/search/create/append；
    删除只通过宿主「连数据一起删」。
 3. **根目录固定** `ctx.data_dir / "space"`，不接受任意绝对路径；路径必须过 `normalize_path`。
