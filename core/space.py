@@ -810,6 +810,36 @@ class SpaceStore:
                     pass
                 return {**self._file_info(target), "id": ident, "restored": True}
 
+    async def purge(self, item_id: Any) -> dict[str, Any]:
+        """永久删除回收站条目；不可恢复，并释放配额。"""
+        self._ready()
+        ident = str(item_id or "").strip()
+        if not TRASH_ID_RE.match(ident):
+            raise SpaceError("回收站 id 不合法")
+        folder = self.root / TRASH_DIR / ident
+        async with self._trash_lock:
+            if not folder.is_dir():
+                raise SpaceError(f"回收站记录不存在：{ident}", code="missing")
+            meta = _read_json(folder / TRASH_META)
+            rel = ""
+            size = 0
+            if isinstance(meta, dict):
+                try:
+                    rel = normalize_path(meta.get("path"))
+                except SpaceError:
+                    rel = str(meta.get("path") or "")
+                raw_size = meta.get("size")
+                if isinstance(raw_size, int):
+                    size = raw_size
+            try:
+                content = folder / TRASH_CONTENT
+                if content.is_file():
+                    size = content.stat().st_size
+                shutil.rmtree(folder)
+            except OSError as exc:
+                raise SpaceError(f"永久删除失败：{exc}") from exc
+            return {"id": ident, "path": rel, "size": size, "purged": True}
+
     def _new_trash_id(self) -> str:
         trash = self.root / TRASH_DIR
         for _ in range(5):

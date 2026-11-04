@@ -49,6 +49,7 @@ def test_read_tools_always_present(store: SpaceStore) -> None:
         "space_edit",
         "space_delete",
         "space_restore",
+        "space_purge",
     ]
 
 
@@ -130,6 +131,12 @@ async def test_edit_delete_trash_restore_tools(store: SpaceStore) -> None:
     read = await _tool(tools, "space_read").handler(ctx, {"path": "notes/list.md"})
     assert read["content"] == "1. 贰叔\n"
     assert any(item["tool"] == "space_restore" for item in store.recent_audit(10))
+
+    await _tool(tools, "space_delete").handler(ctx, {"path": "notes/list.md"})
+    trash = await _tool(tools, "space_trash").handler(ctx, {})
+    purged = await _tool(tools, "space_purge").handler(ctx, {"id": trash["items"][0]["id"]})
+    assert purged["purged"] is True
+    assert store.trash_items()["total"] == 0
 
 
 @pytest.mark.asyncio
@@ -259,5 +266,8 @@ def test_schemas_are_openai_functions(store: SpaceStore) -> None:
     restore = _tool(tools, "space_restore")
     assert restore.parameters["required"] == ["id"]
     assert restore.read_only is False
+    purge = _tool(tools, "space_purge")
+    assert purge.parameters["required"] == ["id"]
+    assert purge.read_only is False
     assert _tool(tools, "space_trash").read_only is True
     assert _tool(tools, "space_list").read_only is True

@@ -196,6 +196,26 @@ async def test_quota_counts_trash(store: SpaceStore) -> None:
 
 
 @pytest.mark.asyncio
+async def test_purge_frees_quota(store: SpaceStore) -> None:
+    small = Limits(max_files=1)
+    await store.create("a.md", "a", small)
+    deleted = await store.delete("a.md")
+    purged = await store.purge(deleted["id"])
+    assert purged["purged"] is True
+    assert purged["path"] == "a.md"
+    assert store.trash_items()["total"] == 0
+    assert store.stats(small)["total_files"] == 0
+    await store.create("b.md", "b", small)
+
+
+@pytest.mark.asyncio
+async def test_purge_missing(store: SpaceStore) -> None:
+    with pytest.raises(SpaceError) as error:
+        await store.purge("20260101-000000-abcdef")
+    assert error.value.code == "missing"
+
+
+@pytest.mark.asyncio
 async def test_delete_missing(store: SpaceStore) -> None:
     with pytest.raises(SpaceError) as error:
         await store.delete("nope.md")

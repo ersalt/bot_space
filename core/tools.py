@@ -235,6 +235,16 @@ def build_tools(
             lambda: store.restore(item_id, _limits(settings)),
         )
 
+    async def space_purge(ctx: ToolContext, args: dict[str, Any]) -> dict[str, Any]:
+        item_id = _string_arg(args, "id")
+        return await _run(
+            ctx,
+            store,
+            "space_purge",
+            item_id,
+            lambda: store.purge(item_id),
+        )
+
     tools = [
         Tool(
             name="space_list",
@@ -399,6 +409,24 @@ def build_tools(
                 ["id"],
             ),
             handler=space_restore,
+            read_only=False,
+        ),
+        Tool(
+            name="space_purge",
+            description=(
+                "从回收站永久删除一个条目，不可恢复，并释放配额。"
+                "先用 space_trash 拿 id；只有确定不要了才用。"
+            ),
+            parameters=_object(
+                {
+                    "id": {
+                        "type": "string",
+                        "description": "回收站条目的 id，例如 20261105-012345-a1b2c3",
+                    }
+                },
+                ["id"],
+            ),
+            handler=space_purge,
             read_only=False,
         ),
     ]

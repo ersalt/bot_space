@@ -36,6 +36,7 @@ def test_setup_creates_space_and_tools(plugin_module, fake_ctx) -> None:
         "space_edit",
         "space_delete",
         "space_restore",
+        "space_purge",
     ]
     assert not hasattr(plugin_module, "COMMANDS"), "bot_space 不提供用户命令"
 
@@ -65,6 +66,7 @@ async def test_system_prompt_is_static_and_toggleable(plugin_module, fake_ctx) -
     assert "不要编造写入结果" in first
     assert "space_edit" in first
     assert "回收站" in first
+    assert "space_purge" in first
     assert "只读工具" in first
 
     fake_ctx.settings["autonomy_guard"] = False
