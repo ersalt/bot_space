@@ -6,8 +6,11 @@
 
 ### 工具
 
-- 新增 `tools/package_plugin.py`：只打运行时文件，生成 `dist/bot_space-<version>.zip`，
-  不带 `.git`、`tests`、`docs` 或缓存；主面板「安装 ZIP」直接导入。
+- 新增单文件拖拽工具 `拖拽打包.cmd`：
+  - 插件模式：识别 `plugin.toml` + `plugin.py`，只收运行时文件；
+  - 通用模式：打包任意项目文件夹，默认排除 `.git`、`tests`、`docs`、`tools`、缓存等；
+  - 支持项目根目录 `.packageignore` 追加排除规则；
+  - 输出 `dist/<文件夹名>-<版本>.zip`。
 
 ## 0.5.0 — 2026-11-05
 

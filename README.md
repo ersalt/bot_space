@@ -110,24 +110,43 @@ token 绑定会话和操作，15 分钟过期。token 只是操作确认凭证�
 
 ---
 
-## 3. 安装（ZIP）
+## 3. 打包 / 安装
 
-不使用部署脚本。仓库自带一个只打干净 ZIP 的小工具：
+仓库根目录有一个单文件工具 **`拖拽打包.cmd`**：
 
-```powershell
-D:\Dev\qq-bot-lite\.venv\Scripts\python.exe tools\package_plugin.py
-```
+- 把任意项目文件夹拖到它上面；
+- 或双击它，打包它所在的那个文件夹；
+- 这个 `.cmd` 本身可以复制到任何地方，不依赖仓库里的其它脚本。
+
+它会自动判断两种模式：
+
+- **插件模式**：文件夹里有 `plugin.toml` 和 `plugin.py`（qq-bot-lite 插件）。
+  只收 `plugin.toml`、`plugin.py`、`core/`、`pages/`、README、CHANGELOG、LICENSE，
+  版本号从 `plugin.toml` 读。
+- **通用模式**：其他项目。收整个文件夹，但默认排除 `.git`、`.github`、`.venv`、`node_modules`、
+  `dist`、`build`、`logs`、`tests`、`docs`、`tools`、缓存和临时文件。
+  版本号优先读 `VERSION`，没有就用时间戳。
 
 输出：
 
 ```text
-dist/bot_space-0.5.0.zip
+项目文件夹\dist\<文件夹名>-<版本>.zip
 ```
 
-ZIP 里只有 `bot_space/plugin.toml`、`plugin.py`、`core/`、`pages/`、README、CHANGELOG、LICENSE，
-不带 `.git`、`tests`、`docs`、缓存。主面板「安装 ZIP」直接选它即可。
+ZIP 顶层是项目文件夹名，解压/安装不会把文件散到根目录。
 
-### 手动打包（不想跑脚本时）
+通用模式如果还要排除更多文件，在项目根目录放一个 `.packageignore`，一行一个规则，支持
+`*` 通配和 `目录/`：
+
+```text
+secret.txt
+*.log
+assets/cache/
+```
+
+工具用 Windows 自带的 PowerShell 和 `Compress-Archive`，不需要 Python，也不需要安装依赖。
+
+### 手动打包（备用）
 
 只放运行时文件：
 
@@ -144,17 +163,14 @@ LICENSE
 不要放 `.git/`、`tests/`、`docs/`、`AGENTS.md`、`pytest.ini`、`ruff.toml`、`.github/` 和缓存。
 ZIP 支持两种结构，任选一种：
 
-- **根目录布局（推荐）**：ZIP 根目录直接是 `plugin.toml`；ZIP 文件名用 `bot_space.zip`，
+- **根目录布局**：ZIP 根目录直接是 `plugin.toml`；ZIP 文件名用 `bot_space.zip`，
   安装器会用文件名作插件 id。
 - **文件夹布局**：ZIP 里第一层是 `bot_space/plugin.toml`，其余文件在 `bot_space/` 下。
-
-Windows 做法：打开 `D:\Dev\bot_space`，只选中上面这些文件/目录，
-右键「发送到 → 压缩(zipped)文件夹」，把生成的 ZIP 改名成 `bot_space.zip`。
 
 ### 安装
 
 1. 主面板「插件」页先删除旧的 **BOT空间**（只删插件，保留数据；同名直接安装会 409）；
-2. 点「安装 ZIP」，拖入或选择 `dist/bot_space-0.5.0.zip`（或手动打的 `bot_space.zip`）；
+2. 点「安装 ZIP」，拖入或选择 `dist\bot_space-0.5.0.zip`；
 3. 安装后默认不启用，打开 **BOT空间** 的开关；
 4. 点「打开面板」，地址是 `/plugins/bot_space/`。
 

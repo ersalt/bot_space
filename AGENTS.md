@@ -20,12 +20,12 @@ Markdown 手记。插件只给模型工具，不给用户命令；面板只读�
 ## 目录
 
 ```
+拖拽打包.cmd       单文件拖拽打包工具：插件模式只收运行时文件；通用模式排除开发文件
 plugin.toml        清单 + 设置项（不导入代码就能读）
 plugin.py          setup / tools() / 只读面板 GET 路由
 core/space.py      纯逻辑，不 import app.*：路径、配额、原子写、审计、搜索、回收站
 core/tools.py      十个模型工具的 schema 与 handler（只 import app.sdk）
 pages/index.html   单文件只读面板：文件树、Markdown 原文/预览、用量、审计、回收站
-tools/             package_plugin.py：打干净 ZIP（不部署、不碰主项目）
 tests/             conftest 在没有主项目时注入最小 app.sdk stub
 ```
 
@@ -40,12 +40,13 @@ D:\Dev\qq-bot-lite\.venv\Scripts\python.exe -m app.pluginkit.check D:\Dev\bot_sp
 
 安装（**用户手动打 ZIP，代理不要生成/执行部署脚本**）：
 
-```powershell
-D:\Dev\qq-bot-lite\.venv\Scripts\python.exe tools\package_plugin.py
-```
+把项目文件夹拖到 **`拖拽打包.cmd`** 上，或双击它打当前仓库。
+输出 `项目文件夹\dist\<文件夹名>-<版本>.zip`，主面板「安装 ZIP」导入。
 
-生成 `dist/bot_space-<version>.zip`（只含 `bot_space/` 运行时文件），主面板「安装 ZIP」导入。
-仓库只保留这个打包工具，不写部署/启用脚本。
+- 文件夹里有 `plugin.toml` + `plugin.py` → 插件模式，只收运行时文件；
+- 其它项目 → 通用模式，排除 `.git`/`tests`/`docs`/`tools`/缓存等，支持 `.packageignore`。
+
+仓库只保留这个单文件打包工具，不写部署/启用脚本。
 
 ## 不能碰的设计
 
