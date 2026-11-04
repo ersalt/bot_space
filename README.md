@@ -112,9 +112,22 @@ token 绑定会话和操作，15 分钟过期。token 只是操作确认凭证�
 
 ## 3. 安装（ZIP）
 
-不使用部署脚本。手动打一个干净的 ZIP，在主面板「插件 → 安装 ZIP」导入。
+不使用部署脚本。仓库自带一个只打干净 ZIP 的小工具：
 
-### 打包
+```powershell
+D:\Dev\qq-bot-lite\.venv\Scripts\python.exe tools\package_plugin.py
+```
+
+输出：
+
+```text
+dist/bot_space-0.5.0.zip
+```
+
+ZIP 里只有 `bot_space/plugin.toml`、`plugin.py`、`core/`、`pages/`、README、CHANGELOG、LICENSE，
+不带 `.git`、`tests`、`docs`、缓存。主面板「安装 ZIP」直接选它即可。
+
+### 手动打包（不想跑脚本时）
 
 只放运行时文件：
 
@@ -141,7 +154,7 @@ Windows 做法：打开 `D:\Dev\bot_space`，只选中上面这些文件/目录�
 ### 安装
 
 1. 主面板「插件」页先删除旧的 **BOT空间**（只删插件，保留数据；同名直接安装会 409）；
-2. 点「安装 ZIP」，拖入或选择 `bot_space.zip`；
+2. 点「安装 ZIP」，拖入或选择 `dist/bot_space-0.5.0.zip`（或手动打的 `bot_space.zip`）；
 3. 安装后默认不启用，打开 **BOT空间** 的开关；
 4. 点「打开面板」，地址是 `/plugins/bot_space/`。
 

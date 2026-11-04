@@ -25,6 +25,7 @@ plugin.py          setup / tools() / 只读面板 GET 路由
 core/space.py      纯逻辑，不 import app.*：路径、配额、原子写、审计、搜索、回收站
 core/tools.py      十个模型工具的 schema 与 handler（只 import app.sdk）
 pages/index.html   单文件只读面板：文件树、Markdown 原文/预览、用量、审计、回收站
+tools/             package_plugin.py：打干净 ZIP（不部署、不碰主项目）
 tests/             conftest 在没有主项目时注入最小 app.sdk stub
 ```
 
@@ -39,10 +40,12 @@ D:\Dev\qq-bot-lite\.venv\Scripts\python.exe -m app.pluginkit.check D:\Dev\bot_sp
 
 安装（**用户手动打 ZIP，代理不要生成/执行部署脚本**）：
 
-1. 只打运行时文件：`plugin.toml`、`plugin.py`、`core/`、`pages/`、`README.md`、
-   `CHANGELOG.md`、`LICENSE`；
-2. 主面板「插件」先删旧插件（保留数据），再「安装 ZIP」；
-3. 启用/重载；`router` 和 `pages/` 的增删要重启进程才彻底生效。
+```powershell
+D:\Dev\qq-bot-lite\.venv\Scripts\python.exe tools\package_plugin.py
+```
+
+生成 `dist/bot_space-<version>.zip`（只含 `bot_space/` 运行时文件），主面板「安装 ZIP」导入。
+仓库只保留这个打包工具，不写部署/启用脚本。
 
 ## 不能碰的设计
 

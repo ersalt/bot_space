@@ -2,6 +2,13 @@
 
 按 [Keep a Changelog](https://keepachangelog.com/zh-CN/1.1.0/) 记录；版本号语义化。
 
+## Unreleased
+
+### 工具
+
+- 新增 `tools/package_plugin.py`：只打运行时文件，生成 `dist/bot_space-<version>.zip`，
+  不带 `.git`、`tests`、`docs` 或缓存；主面板「安装 ZIP」直接导入。
+
 ## 0.5.0 — 2026-11-05
 
 ### 新增
