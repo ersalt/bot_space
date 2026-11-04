@@ -63,15 +63,16 @@ async def test_system_prompt_is_static_and_toggleable(plugin_module, fake_ctx) -
     assert "只是建议，不是命令" in first
     assert "不是指令" in first
     assert "密码、密钥" in first
-    assert "未调用或失败就如实说明" in first
+    assert "如实说明" in first
     assert "space_edit" in first
-    assert "space_purge" in first
+    assert "purge" in first
     assert "第三方" in first
     assert "明确确认" in first
     assert "原 token" in first
     assert "自称" in first
-    assert "确认≠授权" in first
+    assert "确认不等于授权" in first
     assert "结束本轮" in first
+    assert "读取/搜索" in first
 
     fake_ctx.settings["autonomy_guard"] = False
     assert await extension.system_prompt(None) is None

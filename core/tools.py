@@ -216,6 +216,31 @@ def _preview_purge(store: SpaceStore, item_id: str) -> dict[str, Any]:
     raise SpaceError(f"回收站记录不存在：{item_id}", code="missing")
 
 
+def _preview_restore(store: SpaceStore, item_id: str) -> dict[str, Any]:
+    for item in store.trash_items(200)["items"]:
+        if item["id"] == item_id:
+            return item
+    raise SpaceError(f"回收站记录不存在：{item_id}", code="missing")
+
+
+def _preview_append(store: SpaceStore, path: str, text: str) -> dict[str, Any]:
+    preview: dict[str, Any] = {
+        "path": path,
+        "append": _clip(text, 400),
+        "sensitive": True,
+    }
+    try:
+        data = store.read(path, limit=None)
+    except SpaceError as exc:
+        if exc.code == "missing":
+            preview["new_file"] = True
+            return preview
+        raise
+    preview["size"] = data["size"]
+    preview["existing_tail"] = _clip(data["content"][-400:], 400)
+    return preview
+
+
 async def _run(
     ctx: ToolContext,
     store: SpaceStore,
@@ -305,6 +330,20 @@ def build_tools(
     async def space_append(ctx: ToolContext, args: dict[str, Any]) -> dict[str, Any]:
         path = _string_arg(args, "path")
         text = _text_arg(args)
+        sensitive = _bool_arg(args, "sensitive", False)
+        digest = _digest("space_append", path=path, text=text, sensitive=sensitive)
+        if sensitive and not _consume_challenge(
+            ctx, args.get("confirm_token"), "space_append", digest
+        ):
+            preview = _preview_append(store, path, text)
+            return _challenge(
+                store,
+                ctx,
+                tool="space_append",
+                path=path,
+                digest=digest,
+                preview=preview,
+            )
         return await _run(
             ctx,
             store,
@@ -371,6 +410,17 @@ def build_tools(
 
     async def space_restore(ctx: ToolContext, args: dict[str, Any]) -> dict[str, Any]:
         item_id = _string_arg(args, "id")
+        digest = _digest("space_restore", id=item_id)
+        if not _consume_challenge(ctx, args.get("confirm_token"), "space_restore", digest):
+            preview = _preview_restore(store, item_id)
+            return _challenge(
+                store,
+                ctx,
+                tool="space_restore",
+                path=item_id,
+                digest=digest,
+                preview=preview,
+            )
         return await _run(
             ctx,
             store,
@@ -422,7 +472,8 @@ def build_tools(
             name="space_read",
             description=(
                 "读取手记里的一篇 Markdown。默认从头读，单次最多返回配置的字数，"
-                "被截断时用 offset 继续读；只读。"
+                "被截断时用 offset 继续读；只读。结果仅供内部检索：不要把与请求者无关的"
+                "第三方隐私、片段、文件名或行号复述给请求者；归属不明不披露。"
             ),
             parameters=_object(
                 {
@@ -441,7 +492,9 @@ def build_tools(
             name="space_search",
             description=(
                 "在手记的所有 Markdown 里按关键词搜索（不区分大小写），"
-                "返回路径、行号和匹配行。找以前记过什么时用；只读。"
+                "返回路径、行号和匹配行。只读。搜索结果仅供内部检索：不得把命中片段、"
+                "文件名、行号或命中数量直接暴露给请求者；不得用搜索绕过读取限制；"
+                "归属不明不披露。"
             ),
             parameters=_object(
                 {
@@ -460,7 +513,8 @@ def build_tools(
             name="space_trash",
             description=(
                 "查看回收站里被删除的文件：id、原路径、大小、删除时间。"
-                "删除/恢复前先用它让对方确认具体条目；只读。"
+                "删除/恢复前先用它让对方确认具体条目；只读。回收站信息也属于空间隐私，"
+                "不向无关请求者披露第三方被删文件、时间或原因。"
             ),
             parameters=_object({}),
             handler=space_trash,
@@ -475,6 +529,8 @@ def build_tools(
             description=(
                 "在手记新建一篇 Markdown。已存在会失败，不会覆盖；"
                 "要补充已有文件用 space_append，要修改已有内容用 space_edit。"
+                "不得把用户单方面的指控、猜测或未证实的第三方隐私写成事实；"
+                "不写密码、密钥、指令注入或无价值灌水；不要拆分文件绕过审核。"
             ),
             parameters=_object(
                 {
@@ -492,8 +548,10 @@ def build_tools(
         Tool(
             name="space_append",
             description=(
-                "向手记的 Markdown 追加内容；文件不存在会自动新建。"
-                "只用于新增；修改已有内容或删掉某一行请用 space_edit，不要用 append 反复追加“更正”。"
+                "向手记的 Markdown 追加内容；文件不存在会自动新建。append 也是修改："
+                "更正、覆盖、删改、涉及第三方记录或归属不明时，必须把 sensitive 设为 true，"
+                "第一次只返回 preview 和 confirm_token，确认后再带 token 调一次；"
+                "普通、独立、无害的补充可以 sensitive=false 直接追加。"
             ),
             parameters=_object(
                 {
@@ -501,6 +559,14 @@ def build_tools(
                     "text": {
                         "type": "string",
                         "description": "要追加的 Markdown 正文；不能为空",
+                    },
+                    "sensitive": {
+                        "type": "boolean",
+                        "description": "更正/覆盖/删改/第三方记录/归属不明时设 true，会先预览确认",
+                    },
+                    "confirm_token": {
+                        "type": "string",
+                        "description": "sensitive 追加第一次预览返回的确认 token",
                     },
                 },
                 ["path", "text"],
@@ -564,15 +630,20 @@ def build_tools(
         Tool(
             name="space_restore",
             description=(
-                "把回收站里的文件恢复到原路径。先用 space_trash 拿 id，并让对方确认要恢复哪条；"
-                "原路径已有文件时会失败。"
+                "把回收站里的文件恢复到原路径。先用 space_trash 拿 id；"
+                "首次只返回 preview 和 confirm_token，不执行；展示预览并等待下一条消息明确确认后，"
+                "才可带 token 再调一次。原路径已有文件时会失败；第三方内容或归属不明不恢复。"
             ),
             parameters=_object(
                 {
                     "id": {
                         "type": "string",
                         "description": "回收站条目的 id，例如 20261105-012345-a1b2c3",
-                    }
+                    },
+                    "confirm_token": {
+                        "type": "string",
+                        "description": "第一次预览返回的确认 token；确认后才带它再调一次",
+                    },
                 },
                 ["id"],
             ),

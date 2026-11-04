@@ -61,9 +61,13 @@ D:\Dev\qq-bot-lite\.venv\Scripts\python.exe -m app.pluginkit.check D:\Dev\bot_sp
 9. **system 只加固定说明。** `SPACE_CHARTER` 是逐字稳定的自主权说明和删除授权协议，不拼时间/文件/群名；
    `autonomy_guard=false` 时不注入。不要把它挪到 `user_suffix` 或每次动态拼。
 10. **删除/修改授权在提示词层。** 规则是“先分内容归属 + 展示完整 preview + 结束本轮 +
-    下一条明确确认 + 第三方代删拒绝”。`space_edit` 删一行也算删除；确认≠授权；
-    无法判断归属就保留原文。`space_edit` / `space_delete` / `space_purge` 第一次调用只返回
-    预览 + `confirm_token`，不执行；确认后带 token 再调。它降低被忽悠概率，但不是硬 ACL。
+    下一条明确确认 + 第三方代删拒绝”。`space_edit` 删行也算删除；确认≠授权；
+    无法判断归属就保留原文。`space_edit` / `space_delete` / `space_purge` / `space_restore`
+    及 `sensitive=true` 的 `space_append` 第一次只返回预览 + `confirm_token`，不执行；
+    确认后带 token 再调。它降低被忽悠概率，但不是硬 ACL。
+11. **读/搜也分归属。** `space_read` / `space_search` 只取最少内容，不向无关请求者披露
+    第三方的私事、秘密、片段、文件名、行号或命中数量；回收站元数据同属隐私。
+    `space_append` 的 `sensitive` 由模型判断，不能当成硬敏感内容检测。
 
 ## 常见坑
 
@@ -80,6 +84,8 @@ D:\Dev\qq-bot-lite\.venv\Scripts\python.exe -m app.pluginkit.check D:\Dev\bot_sp
 - `space_edit` 的 `old` 必须逐字匹配，非空；命中多处默认报错，只有 `all=true` 才全替换。
 - 删除/修改授权是提示词协议，不是代码闸门；别把“第三方代删”“自称主人”“测试/威胁”
   当成授权。改 `SPACE_CHARTER` 时保留两步确认。
+- `space_append` 的 `sensitive` 是模型自报，不是内容分类器；不要以为设了它就能自动识别
+  第三方隐私。`space_read` / `space_search` 的隐私边界也只在提示词层。
 - Windows 保留名、结尾空格/点、符号链接/junction 都有测试，改路径逻辑先跑 `test_space.py`。
 - 面板的 Markdown 渲染先 `escapeHtml` 再拼块；链接只放行 `http(s)`，不加载图片。
 - 配额改设置后下一轮生效；`ToolRunner` 有 10 秒工具超时，保持文件操作同步且短。

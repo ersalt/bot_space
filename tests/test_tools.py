@@ -137,7 +137,9 @@ async def test_edit_delete_trash_restore_tools(store: SpaceStore) -> None:
     item = trash["items"][0]
     assert item["path"] == "notes/list.md"
 
-    restored = await _tool(tools, "space_restore").handler(ctx, {"id": item["id"]})
+    restored = await _confirmed(
+        _tool(tools, "space_restore"), ctx, {"id": item["id"]}
+    )
     assert restored["restored"] is True
     read = await _tool(tools, "space_read").handler(ctx, {"path": "notes/list.md"})
     assert read["content"] == "1. 贰叔\n"
@@ -208,6 +210,33 @@ async def test_delete_requires_confirmation(store: SpaceStore) -> None:
         ctx, {"path": "b.md", "confirm_token": third["confirm_token"]}
     )
     assert reused["needs_confirmation"] is True
+
+
+@pytest.mark.asyncio
+async def test_sensitive_append_requires_confirmation(store: SpaceStore) -> None:
+    tools = build_tools(store, lambda: {})
+    ctx = _ctx()
+    await store.create("b.md", "B 的记录", store_limits())
+
+    first = await _tool(tools, "space_append").handler(
+        ctx,
+        {"path": "b.md", "text": "B 承认了某事", "sensitive": True},
+    )
+    assert first["needs_confirmation"] is True
+    assert "B 承认了某事" in first["preview"]["append"]
+    assert store.read("b.md")["content"] == "B 的记录"
+
+    done = await _tool(tools, "space_append").handler(
+        ctx,
+        {
+            "path": "b.md",
+            "text": "B 承认了某事",
+            "sensitive": True,
+            "confirm_token": first["confirm_token"],
+        },
+    )
+    assert done["created"] is False
+    assert "B 承认了某事" in store.read("b.md")["content"]
 
 
 @pytest.mark.asyncio
