@@ -59,12 +59,16 @@ powershell -ExecutionPolicy Bypass -File tools\deploy-to-bot.ps1
 6. **原子写**：同目录临时文件 + `os.replace`；同一路径 `asyncio.Lock` 串行。
 7. **审计不记正文**：只记工具名、路径、字数、成败、会话键；日志也不打完整内容。
 8. **不引入依赖**：只用标准库 + 主程序已装的包；面板不引 CDN/外部字体/图标库。
+9. **system 只加固定说明。** `SPACE_CHARTER` 是逐字稳定的自主权说明，不拼时间/文件/群名；
+   `autonomy_guard=false` 时不注入。不要把它挪到 `user_suffix` 或每次动态拼。
 
 ## 常见坑
 
 - 工具 handler 的预期失败用 `SpaceError`（带 `code`）；宿主会转成 `ok: false`，
   不要自己返回 `{"ok": false}` 再被包一层。
 - `allow_write = false` 时 `tools()` 直接不返回写工具；不要只靠 handler 里判断。
+- 自主权说明只在 `system_prompt` 里返回固定文本；改它会导致一次 KV 缓存重建，但不要为了
+  “新鲜感”在 system 里拼动态内容。
 - 路径清洗会 slug 化并转小写，读路径必须用 `space_list` 返回的规范路径。
 - 手记全局一份；群聊和私聊只影响审计的 `session`，不影响存储路径。不要加按会话分目录。
 - Windows 保留名、结尾空格/点、符号链接/junction 都有测试，改路径逻辑先跑 `test_space.py`。

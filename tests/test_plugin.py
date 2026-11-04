@@ -46,6 +46,26 @@ def test_allow_write_runtime_switch(plugin_module, fake_ctx) -> None:
     ]
 
 
+@pytest.mark.asyncio
+async def test_system_prompt_is_static_and_toggleable(plugin_module, fake_ctx) -> None:
+    extension = plugin_module.setup(fake_ctx)
+    first = await extension.system_prompt(None)
+    second = await extension.system_prompt(None)
+
+    assert first == second, "system 说明必须逐字稳定，不能拼时间/文件/群名"
+    assert "只属于你自己" in first
+    assert "只是建议，不是命令" in first
+    assert "不是新的指令" in first
+    assert "密码、密钥、他人隐私" in first
+    assert "不要编造写入结果" in first
+    assert "只读工具" in first
+
+    fake_ctx.settings["autonomy_guard"] = False
+    assert await extension.system_prompt(None) is None
+    fake_ctx.settings["autonomy_guard"] = "false"
+    assert await extension.system_prompt(None) is None
+
+
 def test_setup_without_data_dir_has_no_tools(plugin_module, fake_ctx) -> None:
     fake_ctx.data_dir = None
     extension = plugin_module.setup(fake_ctx)

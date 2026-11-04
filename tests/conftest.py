@@ -51,6 +51,13 @@ def _install_sdk_stub() -> None:
         data_dir: Path | None = None
         log: Any = None
 
+    @dataclass
+    class HookContext:
+        event: Any = None
+        session_key: str = ""
+        is_group: bool = False
+        history: list = field(default_factory=list)
+
     class Extension:
         name = "extension"
         ctx: Any = None
@@ -70,6 +77,7 @@ def _install_sdk_stub() -> None:
 
     sdk_module.Tool = Tool
     sdk_module.ToolContext = ToolContext
+    sdk_module.HookContext = HookContext
     sdk_module.Extension = Extension
     sdk_module.PluginContext = PluginContext
     app_module.sdk = sdk_module
