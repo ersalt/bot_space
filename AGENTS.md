@@ -42,7 +42,7 @@ D:\Dev\qq-bot-lite\.venv\Scripts\python.exe -m app.pluginkit.check D:\Dev\bot_sp
 安装（**用户手动打 ZIP，代理不要生成/执行部署脚本**）：
 
 用 **`D:\Dev\拖拽打包.cmd`** 拖项目文件夹，或把它复制到项目里再双击。
-输出到工具所在目录的 `dist\`，不是被拖项目的 `dist\`；主面板「安装 ZIP」导入。
+输出到工具所在目录，和 `.cmd` 同级，不是被拖项目的目录；主面板「安装 ZIP」导入。
 
 - 文件夹里有 `plugin.toml` + `plugin.py` → 插件模式，按 git/默认排除收运行时文件；
   有 `id` 用 `id` 作顶层目录，否则用文件夹名；

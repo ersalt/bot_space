@@ -13,7 +13,7 @@
     `git ls-files --cached --others --exclude-standard` 遵守 `.gitignore`；
     再叠加默认打包排除和 `.packageignore`；
   - 不是 git 仓库时退回默认排除和 `.packageignore`；
-  - 输出到工具所在目录的 `dist\<文件夹名>-<版本>.zip`，不再写进被拖项目的 `dist\`。
+  - 输出到工具所在目录，和 `.cmd` 同级；不再写进被拖项目，也不建 `dist\`。
 
 ## 0.5.0 — 2026-11-05
 
