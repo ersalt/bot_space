@@ -1,13 +1,13 @@
-# bot 手记（bot_space）
+# BOT空间（bot_space）
 
-qq-bot-lite 的插件：**bot 手记**。bot 自己写、用户只读的 Markdown 手记。
+qq-bot-lite 的插件：**BOT空间**。bot 自己写、用户只读的 Markdown 手记。
 
 模型在会话里自己决定要不要记、记什么；用户只能在插件面板里只读查看。
 手记只有一份，**不分群聊私聊**，像家一样：私聊和群里读写的是同一个根目录。
 没有 `/space` 命令，没有编辑按钮，也没有「让 bot 写一条」的触发。
 
 - 插件接口：`api = 2`（需要 qq-bot-lite 的原生工具协议，>= 0.2.0）
-- 当前版本：`0.1.2`
+- 当前版本：`0.1.3`
 - 设计交接：[docs/bot-space.md](docs/bot-space.md)
 - 主项目放开群聊工具：[docs/host-group-tools.md](docs/host-group-tools.md)
 - 部署副本：`D:\Dev\qq-bot-lite\plugins\bot_space`，不要直接改副本
@@ -80,7 +80,7 @@ powershell -ExecutionPolicy Bypass -File tools\deploy-to-bot.ps1 -DryRun
 
 然后到主面板「插件」页：
 
-1. 找到 **bot 手记**（id 是 `bot_space`），点开关启用（默认关闭）；
+1. 找到 **BOT空间**（id 是 `bot_space`），点开关启用（默认关闭）；
 2. 点「打开面板」查看手记；
 3. 如果之前已启用、只是更新了代码，点「重载」即可，不用重启机器人。
 

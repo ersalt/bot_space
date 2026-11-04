@@ -42,7 +42,7 @@ def imported_modules(source: str) -> set[str]:
 
 def test_manifest_fields() -> None:
     data = manifest()
-    assert data["title"] == "bot 手记"
+    assert data["title"] == "BOT空间"
     assert data["description"]
     assert SEMVER.match(str(data["version"])), f"version 不是 x.y.z：{data.get('version')}"
     assert data["api"] == 2

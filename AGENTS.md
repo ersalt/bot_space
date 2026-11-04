@@ -1,10 +1,10 @@
-# AGENTS.md · bot_space（bot 手记）
+# AGENTS.md · bot_space（BOT空间）
 
 给接手这个仓库的 AI / 新同事看的。先读 **README.md** 和 **docs/bot-space.md**，再动代码。
 
 ## 这是什么
 
-qq-bot-lite 的独立插件仓库：**bot 手记**（id `bot_space`），bot 自己写、用户只读的
+qq-bot-lite 的独立插件仓库：**BOT空间**（id `bot_space`），bot 自己写、用户只读的
 Markdown 手记。插件只给模型工具，不给用户命令；面板只读。部署副本在
 `D:\Dev\qq-bot-lite\plugins\bot_space`，**不要直接改副本**。
 
