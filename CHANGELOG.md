@@ -6,14 +6,14 @@
 
 ### 工具
 
-- 新增单文件拖拽工具 `拖拽打包.cmd`：
+- 通用拖拽打包工具移到 `D:\Dev\拖拽打包.cmd`，不入本仓库：
   - 插件模式：识别 `plugin.toml` + `plugin.py`，按 git/默认排除收运行时文件；
     有 `id` 用 `id` 作 ZIP 顶层目录，否则用文件夹名；
   - 通用模式：git 仓库直接调用
     `git ls-files --cached --others --exclude-standard` 遵守 `.gitignore`；
     再叠加默认打包排除和 `.packageignore`；
   - 不是 git 仓库时退回默认排除和 `.packageignore`；
-  - 输出 `dist/<文件夹名>-<版本>.zip`。
+  - 输出到工具所在目录的 `dist\<文件夹名>-<版本>.zip`，不再写进被拖项目的 `dist\`。
 
 ## 0.5.0 — 2026-11-05
 

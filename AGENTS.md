@@ -20,7 +20,6 @@ Markdown 手记。插件只给模型工具，不给用户命令；面板只读�
 ## 目录
 
 ```
-拖拽打包.cmd       单文件拖拽打包工具：插件模式只收运行时文件；通用模式排除开发文件
 plugin.toml        清单 + 设置项（不导入代码就能读）
 plugin.py          setup / tools() / 只读面板 GET 路由
 core/space.py      纯逻辑，不 import app.*：路径、配额、原子写、审计、搜索、回收站
@@ -28,6 +27,8 @@ core/tools.py      十个模型工具的 schema 与 handler（只 import app.sdk
 pages/index.html   单文件只读面板：文件树、Markdown 原文/预览、用量、审计、回收站
 tests/             conftest 在没有主项目时注入最小 app.sdk stub
 ```
+
+打包工具不在本仓库：`D:\Dev\拖拽打包.cmd`。
 
 ## 校验（改完必须跑）
 
@@ -40,15 +41,15 @@ D:\Dev\qq-bot-lite\.venv\Scripts\python.exe -m app.pluginkit.check D:\Dev\bot_sp
 
 安装（**用户手动打 ZIP，代理不要生成/执行部署脚本**）：
 
-把项目文件夹拖到 **`拖拽打包.cmd`** 上，或双击它打当前仓库。
-输出 `项目文件夹\dist\<文件夹名>-<版本>.zip`，主面板「安装 ZIP」导入。
+用 **`D:\Dev\拖拽打包.cmd`** 拖项目文件夹，或把它复制到项目里再双击。
+输出到工具所在目录的 `dist\`，不是被拖项目的 `dist\`；主面板「安装 ZIP」导入。
 
 - 文件夹里有 `plugin.toml` + `plugin.py` → 插件模式，按 git/默认排除收运行时文件；
   有 `id` 用 `id` 作顶层目录，否则用文件夹名；
 - 其它项目 → 通用模式；git 仓库会调用 `git ls-files --cached --others --exclude-standard`
   遵守 `.gitignore`，再叠加默认打包排除；非 git 仓库退回默认排除和 `.packageignore`。
 
-仓库只保留这个单文件打包工具，不写部署/启用脚本。
+仓库不放打包工具，也不写部署/启用脚本。
 
 ## 不能碰的设计
 
