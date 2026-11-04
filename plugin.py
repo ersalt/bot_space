@@ -20,7 +20,7 @@ from fastapi.responses import JSONResponse
 from .core.space import Limits, SpaceError, SpaceStore
 from .core.tools import allow_write, build_tools
 
-VERSION = "0.1.1"
+VERSION = "0.1.2"
 SPACE_LABEL = "data/plugin_data/bot_space/space"
 
 router = APIRouter()

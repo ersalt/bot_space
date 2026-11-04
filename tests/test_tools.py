@@ -18,11 +18,11 @@ def store(tmp_path: Path) -> SpaceStore:
     return instance
 
 
-def _ctx(session: str = "private:1") -> ToolContext:
+def _ctx(session: str = "private:1", *, is_group: bool = False) -> ToolContext:
     return ToolContext(
         plugin="bot_space",
         session_key=session,
-        is_group=False,
+        is_group=is_group,
         is_admin=True,
         data_dir=None,
         log=None,
@@ -89,6 +89,30 @@ async def test_tools_roundtrip(store: SpaceStore) -> None:
     }
     assert all(item["ok"] for item in records)
     assert all(item["session"] == "private:1" for item in records)
+
+
+@pytest.mark.asyncio
+async def test_one_space_across_group_and_private(store: SpaceStore) -> None:
+    """手记只有一份：群聊写入，私聊能读到；审计只按会话记 session。"""
+    tools = build_tools(store, lambda: {})
+    group_ctx = _ctx("group:123", is_group=True)
+    private_ctx = _ctx("private:1")
+
+    appended = await _tool(tools, "space_append").handler(
+        group_ctx, {"path": "notes/shared.md", "text": "群里记的"}
+    )
+    assert appended["created"] is True
+
+    read = await _tool(tools, "space_read").handler(
+        private_ctx, {"path": "notes/shared.md"}
+    )
+    assert read["content"] == "群里记的\n"
+
+    listing = await _tool(tools, "space_list").handler(private_ctx, {})
+    assert [item["path"] for item in listing["files"]] == ["notes/shared.md"]
+
+    sessions = {item["session"] for item in store.recent_audit(5)}
+    assert sessions == {"group:123", "private:1"}
 
 
 @pytest.mark.asyncio

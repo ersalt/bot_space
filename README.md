@@ -2,19 +2,21 @@
 
 qq-bot-lite 的插件：**bot 手记**。bot 自己写、用户只读的 Markdown 手记。
 
-模型在私聊里自己决定要不要记、记什么；用户只能在插件面板里只读查看。
+模型在会话里自己决定要不要记、记什么；用户只能在插件面板里只读查看。
+手记只有一份，**不分群聊私聊**，像家一样：私聊和群里读写的是同一个根目录。
 没有 `/space` 命令，没有编辑按钮，也没有「让 bot 写一条」的触发。
 
 - 插件接口：`api = 2`（需要 qq-bot-lite 的原生工具协议，>= 0.2.0）
-- 当前版本：`0.1.1`
+- 当前版本：`0.1.2`
 - 设计交接：[docs/bot-space.md](docs/bot-space.md)
+- 主项目放开群聊工具：[docs/host-group-tools.md](docs/host-group-tools.md)
 - 部署副本：`D:\Dev\qq-bot-lite\plugins\bot_space`，不要直接改副本
 
 ---
 
 ## 1. bot 现在能做什么
 
-在私聊里，bot 可以这样用手记（部署并在主面板启用后生效）：
+在任何会话里，bot 都可以这样用手记（部署、启用，并且宿主把工具交给该会话后生效）：
 
 - **翻手记**：先 `space_list` 看有哪些文件、标题、大小和修改时间，再决定读哪篇；
 - **读一篇**：`space_read` 读取 Markdown 原文，长文用 `offset` 分页；
@@ -26,10 +28,14 @@ qq-bot-lite 的插件：**bot 手记**。bot 自己写、用户只读的 Markdow
 典型场景：
 
 - 你说「记一下周六要买猫粮」，它可能写进 `notes/todo.md`；
-- 聊到一段值得留的记录，它可能自己追加到当天 journal；
+- 群里聊到一段值得留的记录，它也可能自己追加到当天 journal；
 - 你问「上次记的那个方案呢」，它可能先搜、再读对应文件。
 
 **是否调用、写什么、写哪里，都由模型自己判断**；插件不追问、不自动补写，也不主动发 QQ。
+
+> 当前 qq-bot-lite 的宿主仍只在私聊把工具交给模型（`ChatService._tools_for` 硬编码）。
+> 插件侧不按群聊/私聊分，存储也是全局一份；要让群聊也能用，需要手动改主项目，
+> 见 [docs/host-group-tools.md](docs/host-group-tools.md)。
 
 目前**不能**：删除、覆盖、重命名、移动、读非 `.md` 文件、读任意目录、执行 shell、联网。
 
@@ -50,7 +56,9 @@ qq-bot-lite 的插件：**bot 手记**。bot 自己写、用户只读的 Markdow
 **没有** delete / overwrite / rename / move，也没有二进制、图片、任意扩展名。
 删除只能由用户在插件卡片里「连数据一起删」完成。
 
-工具只在**私聊**暴露（宿主策略）；群聊里模型拿不到这些 schema。
+手记只有一份，**不分群聊私聊**：私聊和群里读写的都是同一个根目录，审计里只按会话
+记 `session`。插件侧不做 `is_group` 限制；当前宿主 `ChatService._tools_for` 仍只在私聊
+把工具交给模型，放开群聊需要手动改主项目，见 [docs/host-group-tools.md](docs/host-group-tools.md)。
 模型是否调用由它自己决定，插件不会追问或自动补写。
 
 ---
@@ -203,7 +211,9 @@ CI 在 `.github/workflows/ci.yml`：Ubuntu/Windows × Python 3.12/3.13，跑 ruf
 - `api = 2`；宿主只加载 `api <= 2` 的插件。
 - 需要 qq-bot-lite 的原生工具协议（`app/sdk.py` 的 `Tool`/`ToolContext`、
   `app/core/tool_runner.py`、`LLMClient.complete_message`）。
-- 工具只在私聊暴露，这是宿主 `ChatService._tools_for` 的策略，插件不自己判断群聊。
+- 手记只有一份，不分群聊私聊；插件不按 `is_group` 限制。
+- 当前宿主只在私聊把工具交给模型；要让群聊也能用，需要手动改主项目
+  （见 [docs/host-group-tools.md](docs/host-group-tools.md)）。
 
 ---
 

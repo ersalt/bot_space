@@ -323,7 +323,7 @@
 <body>
 
 <header class="topbar">
-  <div class="brand">bot_space <span class="ver" id="brand-version">v0.1.1</span></div>
+  <div class="brand">bot_space <span class="ver" id="brand-version">v0.1.2</span></div>
   <span class="tb-sep"></span>
   <span class="tb-scope">手记</span>
   <div class="tb-right">
@@ -353,7 +353,7 @@
 
   <div class="notice" role="note">
     <span class="notice-mark">i</span>
-    <span>只读面板：没有编辑、新建、删除按钮。文件由模型在私聊里通过 <code>space_*</code> 工具读写；群聊不提供这些工具。</span>
+    <span>只读面板：没有编辑、新建、删除按钮。文件由模型在会话里通过 <code>space_*</code> 工具读写；群聊和私聊共用同一份手记（群聊需宿主放开工具）。</span>
   </div>
 
   <section class="card usage" aria-label="手记用量">
@@ -422,7 +422,7 @@
 
   <footer class="foot">
     <span>根目录 <code>data/plugin_data/bot_space/space</code></span>
-    <span>只读 · <span id="foot-version">v0.1.1</span></span>
+    <span>只读 · <span id="foot-version">v0.1.2</span></span>
   </footer>
 </main>
 

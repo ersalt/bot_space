@@ -15,6 +15,7 @@ Markdown 手记。插件只给模型工具，不给用户命令；面板只读�
 - 主项目：`D:\Dev\qq-bot-lite`
 - 接口契约：主项目 `docs/plugin.md`，`api = 2`
 - 设计交接：本仓库 `docs/bot-space.md`
+- 群聊工具的主项目改动说明：`docs/host-group-tools.md`
 
 ## 目录
 
@@ -52,7 +53,9 @@ powershell -ExecutionPolicy Bypass -File tools\deploy-to-bot.ps1
    删除只通过宿主「连数据一起删」。
 3. **根目录固定** `ctx.data_dir / "space"`，不接受任意绝对路径；路径必须过 `normalize_path`。
 4. **面板只读。** 所有接口 GET；不加编辑框、新建、删除、触发按钮。
-5. **工具只在私聊**由宿主暴露；插件不自己判断群聊，也不要绕过宿主直接调模型。
+5. **手记只有一份，不分群聊私聊。** 插件不按 `is_group` 限制，私聊/群里读写同一个根目录；
+   当前宿主仍只在私聊把工具交给模型，放开群聊需要用户手动改主项目
+   （见 `docs/host-group-tools.md`），代理不要改主项目。
 6. **原子写**：同目录临时文件 + `os.replace`；同一路径 `asyncio.Lock` 串行。
 7. **审计不记正文**：只记工具名、路径、字数、成败、会话键；日志也不打完整内容。
 8. **不引入依赖**：只用标准库 + 主程序已装的包；面板不引 CDN/外部字体/图标库。
@@ -63,6 +66,7 @@ powershell -ExecutionPolicy Bypass -File tools\deploy-to-bot.ps1
   不要自己返回 `{"ok": false}` 再被包一层。
 - `allow_write = false` 时 `tools()` 直接不返回写工具；不要只靠 handler 里判断。
 - 路径清洗会 slug 化并转小写，读路径必须用 `space_list` 返回的规范路径。
+- 手记全局一份；群聊和私聊只影响审计的 `session`，不影响存储路径。不要加按会话分目录。
 - Windows 保留名、结尾空格/点、符号链接/junction 都有测试，改路径逻辑先跑 `test_space.py`。
 - 面板的 Markdown 渲染先 `escapeHtml` 再拼块；链接只放行 `http(s)`，不加载图片。
 - 配额改设置后下一轮生效；`ToolRunner` 有 10 秒工具超时，保持文件操作同步且短。

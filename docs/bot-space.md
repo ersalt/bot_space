@@ -1,6 +1,8 @@
 # bot_space 设计交接（Phase 2 已实现）
 
-> 状态：2026-11-05 已在 `D:\Dev\bot_space` 实现 v0.1.1（显示名「bot 手记」，五个工具、只读面板、测试、部署脚本）。
+> 状态：2026-11-05 已在 `D:\Dev\bot_space` 实现 v0.1.2（显示名「bot 手记」，五个工具、只读面板、测试、部署脚本）。
+> 手记**全局一份，不分群聊私聊**；插件侧不按 `is_group` 限制。当前宿主仍只在私聊暴露工具，
+> 放开群聊需要用户手动改主项目，见本仓库 `docs/host-group-tools.md`。
 > 部署与启用由使用者手动执行；本工作区只改插件仓库，不修改主项目、不自动写入
 > `qq-bot-lite\plugins\bot_space`。
 > 主项目：`D:\Dev\qq-bot-lite`（只读依赖，仅作项目用途）。
@@ -71,7 +73,7 @@ qq-bot-lite 的定位是本地轻量 QQ 机器人：OneBot 11 + FastAPI + SQLite
 
 ### 目标
 
-- 模型可以在私聊里自己决定：查看手记、读某篇笔记、搜索、创建、追加。
+- 模型可以在会话里自己决定：查看手记、读某篇笔记、搜索、创建、追加。
 - 工具权限是一张显式的表；移除表项就移除能力，未知工具直接拒绝。
 - 固定根目录 + 路径清洗 + 配额 + 原子写 + 审计。
 - 插件默认关闭；删除插件数据即清空手记，不污染主项目。
@@ -97,7 +99,7 @@ qq-bot-lite（主项目）
   app/sdk.py              Tool / ToolContext（新）
   app/pluginkit/          收集插件 TOOLS，做命名冲突检查
   app/core/tool_runner.py ToolRunner：执行 tool_calls、回填 role=tool
-  app/core/pipeline.py    ChatService 调用 ToolRunner（私聊）
+  app/core/pipeline.py    ChatService 调用 ToolRunner（所有会话）
   docs/plugin.md          api=2 契约 + 示例
 
 bot_space（独立插件仓库）
@@ -222,8 +224,13 @@ TOOLS = [
 
 ### 4.4 工具暴露策略
 
-- 默认**只在私聊**暴露 `bot_space` 工具；群聊不暴露，避免别人诱导 bot 写东西。
-- 插件可以设置 `allow_write` 等开关；宿主只把启用的工具放进 schema。
+- **手记只有一份，像家一样，不分群聊私聊。** 存储按 bot 全局，不按会话分区；
+  工具在哪个会话被调用，只影响审计里的 `session` 字段，不影响读写的根目录。
+- 插件侧**不按 `is_group` 限制**：模型在群聊/私聊都可以 list/read/search/create/append。
+- 当前宿主 `ChatService._tools_for` 仍在群聊返回空，这是主项目需要手动改的一处；
+  插件工作区不能改主项目，补丁与风险见本仓库 `docs/host-group-tools.md`。
+- 群聊写风险：任何群友都可能诱导模型写手记；`allow_write` 是全局开关。若要
+  「群聊只读/仅管理员写」这种粒度，需要宿主按会话或权限过滤工具，插件拿不到这个决策点。
 - 是否调用由模型决定；用户不打命令，最多自然语言说「记一下」，模型自己判断。
 - 系统提示词保持逐字稳定；不要为了工具在 system 里拼动态内容。工具描述本身已经能表达用途。
 - 如果模型不调用工具，不追问、不自动补写；这是它的决定。
@@ -238,7 +245,7 @@ TOOLS = [
 api = 2
 title = "bot 手记"
 description = "模型自己决定写什么的 Markdown 手记；用户只读查看。"
-version = "0.1.1"
+version = "0.1.2"
 panel = "/plugins/bot_space"
 
 [[config]]
@@ -315,7 +322,8 @@ data/plugin_data/bot_space/
 - 配置开关是运行时权限：`allow_write=false` 时只暴露读工具。
 - 固定根目录是防误伤，不是安全沙箱；不要对外宣称「沙箱」。
 - 模型侧永远没有 delete / overwrite；删除只能由宿主删插件数据完成。
-- 私聊/主人可用；群聊不暴露工具。
+- 手记全局一份；群聊/私聊共用同一个根目录，只有审计的 `session` 不同。
+- 工具暴露不按会话类型硬编码；当前宿主仍限私聊，放开方式见 `docs/host-group-tools.md`。
 - 插件代码本身仍是受信代码；如果以后要装不可信插件，才需要 OS 级隔离，那是另一个架构。
 
 ---
@@ -325,9 +333,9 @@ data/plugin_data/bot_space/
 流程：
 
 ```
-用户私聊消息
+会话消息（私聊或群聊）
   → 现有 pipeline 拼 system/history/ambient/quoted
-  → 如果 bot_space 启用且私聊：带 TOOLS schema
+  → 如果 bot_space 启用且宿主允许该会话：带 TOOLS schema
   → 模型返回 content 或 tool_calls
   → 有 tool_calls：ToolRunner 执行、回填 role=tool、再请求（最多 3~4 轮）
   → 最终 content 走现有 after_reply / 分段发送 / 落库
@@ -337,7 +345,7 @@ data/plugin_data/bot_space/
 - 工具结果不塞 system；只在本次 tool 消息里。
 - 模型没有调用工具时，行为和现在完全一样。
 - 单轮工具循环会多花模型请求；日志记录轮数和耗时，方便评估是否值得。
-- 先只在私聊开；群聊保持现在的纯聊天。
+- 工具暴露不按会话类型硬编码；当前宿主仍限私聊，放开方式见 `docs/host-group-tools.md`。
 
 ---
 
@@ -364,7 +372,7 @@ data/plugin_data/bot_space/
 2. `Tool` / `ToolContext` 进 `app/sdk.py`。
 3. `ExtensionRegistry` 收集 `TOOLS`，检查重名；只对启用的插件暴露。
 4. `ToolRunner` + 单测（假工具、超轮数、工具异常、结果截断）。
-5. `ChatService` 私聊接入；工具对话不落历史；单测。
+5. `ChatService` 接入；工具对话不落历史；单测。
 6. `api=2` 文档、`docs/plugin.md`、`AGENTS.md` 更新。
 7. 提交；记录 commit hash 给插件工作区。
 
@@ -376,7 +384,7 @@ data/plugin_data/bot_space/
 4. `pages/index.html` 只读面板 + `router` GET。
 5. `tools/deploy-to-bot.ps1`，部署到 `plugins/bot_space`，写 `.deployed.json`。
 6. 插件自检、pytest、ruff。
-7. 部署到主项目，启用，私聊实测：模型自己决定 list/read/append。
+7. 部署到主项目，启用，私聊/群聊实测：模型自己决定 list/read/append。
 8. 提交插件仓库；发布版本。
 
 ### Phase 3：L3
@@ -430,7 +438,8 @@ D:\Dev\qq-bot-lite\.venv\Scripts\python.exe -m pytest -q
 
 - 面板是否只读（当前设计是只读；删除数据走宿主生命周期）。
 - 是否允许模型 `space_create` 任意标题，还是只允许 `space_append` 当天 journal/固定文件。
-- L2 是否只在私聊开；群聊是否永远关闭。
+- 已定：手记全局一份，不分群聊私聊；宿主群聊暴露策略待主项目手动放开
+  （见 `docs/host-group-tools.md`）。
 - L3 的触发时间、每日预算、是否需要主动摘要（v1 建议不需要）。
 - 工具名是否统一 `space_` 前缀；宿主重名时报错还是自动加插件前缀。
 - `api=2` 的兼容策略：支持 `api<=2`，旧插件不强制升级。
