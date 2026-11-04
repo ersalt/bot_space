@@ -43,8 +43,10 @@ D:\Dev\qq-bot-lite\.venv\Scripts\python.exe -m app.pluginkit.check D:\Dev\bot_sp
 把项目文件夹拖到 **`拖拽打包.cmd`** 上，或双击它打当前仓库。
 输出 `项目文件夹\dist\<文件夹名>-<版本>.zip`，主面板「安装 ZIP」导入。
 
-- 文件夹里有 `plugin.toml` + `plugin.py` → 插件模式，只收运行时文件；
-- 其它项目 → 通用模式，排除 `.git`/`tests`/`docs`/`tools`/缓存等，支持 `.packageignore`。
+- 文件夹里有 `plugin.toml` + `plugin.py` → 插件模式，按 git/默认排除收运行时文件；
+  有 `id` 用 `id` 作顶层目录，否则用文件夹名；
+- 其它项目 → 通用模式；git 仓库会调用 `git ls-files --cached --others --exclude-standard`
+  遵守 `.gitignore`，再叠加默认打包排除；非 git 仓库退回默认排除和 `.packageignore`。
 
 仓库只保留这个单文件打包工具，不写部署/启用脚本。
 

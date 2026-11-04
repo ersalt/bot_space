@@ -5,7 +5,7 @@ set "SRC=%~1"
 if not defined SRC set "SRC=%~dp0"
 set "PS=%TEMP%\folder_pack_%RANDOM%_%RANDOM%.ps1"
 more +19 "%~f0" > "%PS%"
-powershell -NoProfile -ExecutionPolicy Bypass -File "%PS%" "%SRC%"
+powershell -NoProfile -ExecutionPolicy Bypass -File "%PS%" "%SRC%" "%~f0"
 set "CODE=%ERRORLEVEL%"
 del "%PS%" >nul 2>nul
 if not "%CODE%"=="0" goto fail
@@ -17,9 +17,10 @@ echo.
 echo Packaging failed. Check the source folder.
 pause
 exit /b 1
-param([string]$Source = '')
+param([string]$Source = '', [string]$ToolPath = '')
 
 $ErrorActionPreference = 'Stop'
+$script:ToolName = if ($ToolPath) { Split-Path -Leaf $ToolPath } else { '' }
 
 function Resolve-Folder([string]$path) {
     if (-not $path) { throw 'no source folder' }
@@ -43,6 +44,16 @@ function Get-Version([string]$root) {
     return Get-Date -Format 'yyyyMMdd-HHmm'
 }
 
+function Get-PluginId([string]$root, [string]$fallback) {
+    $manifest = Join-Path $root 'plugin.toml'
+    if (Test-Path -LiteralPath $manifest) {
+        $text = Get-Content -LiteralPath $manifest -Raw -Encoding UTF8
+        $match = [regex]::Match($text, '(?m)^id\s*=\s*"([^"]+)"')
+        if ($match.Success) { return $match.Groups[1].Value }
+    }
+    return $fallback
+}
+
 function Test-Excluded([string]$relative) {
     $rel = $relative.Replace('\', '/')
     $parts = $rel -split '/'
@@ -54,7 +65,9 @@ function Test-Excluded([string]$relative) {
     }
     $name = $parts[-1]
     if ($name -match '\.(pyc|pyo|log|tmp|swp)$') { return $true }
-    if ($name -in @('.DS_Store', 'Thumbs.db', '.packageignore')) { return $true }
+    if ($script:ToolName -and $name -eq $script:ToolName) { return $true }
+    if ($name -in @('.DS_Store', 'Thumbs.db', '.packageignore', '.gitignore',
+            '.gitattributes', '.editorconfig', 'AGENTS.md', 'pytest.ini', 'ruff.toml')) { return $true }
     foreach ($pattern in $script:IgnorePatterns) {
         $p = $pattern.Replace('\', '/')
         if ($rel -like $p -or $name -like $p) { return $true }
@@ -63,26 +76,36 @@ function Test-Excluded([string]$relative) {
     return $false
 }
 
-function Copy-Plugin([string]$root, [string]$package) {
-    foreach ($name in @('plugin.toml', 'plugin.py', 'README.md', 'CHANGELOG.md', 'LICENSE')) {
-        $source = Join-Path $root $name
-        if (Test-Path -LiteralPath $source) {
-            Copy-Item -LiteralPath $source -Destination $package -Force
-        }
-    }
-    foreach ($name in @('core', 'pages')) {
-        $source = Join-Path $root $name
-        if (Test-Path -LiteralPath $source) {
-            Copy-Item -LiteralPath $source -Destination $package -Recurse -Force
-        }
-    }
-    $cache = Join-Path $package 'core\__pycache__'
-    if (Test-Path -LiteralPath $cache) {
-        Remove-Item -LiteralPath $cache -Recurse -Force
+function Get-GitFiles([string]$root) {
+    if (-not (Test-Path -LiteralPath (Join-Path $root '.git'))) { return $null }
+    $git = Get-Command git -ErrorAction SilentlyContinue
+    if (-not $git) { return $null }
+    $raw = & $git.Source -c core.quotepath=false -C $root ls-files --cached --others --exclude-standard 2>$null
+    if ($LASTEXITCODE -ne 0) { return $null }
+    return [pscustomobject]@{
+        Files = @($raw | Where-Object { $_ -and $_.Trim() })
     }
 }
 
-function Copy-Generic([string]$root, [string]$package) {
+function Copy-PackageFile([string]$root, [string]$package, [string]$relative) {
+    if (Test-Excluded $relative) { return }
+    $source = Join-Path $root ($relative.Replace('/', '\'))
+    if (-not (Test-Path -LiteralPath $source -PathType Leaf)) { return }
+    $destination = Join-Path $package ($relative.Replace('/', '\'))
+    $parent = Split-Path -Parent $destination
+    if ($parent) {
+        $null = New-Item -ItemType Directory -Path $parent -Force
+    }
+    Copy-Item -LiteralPath $source -Destination $destination -Force
+}
+
+function Copy-Generic([string]$root, [string]$package, $gitInfo) {
+    if ($gitInfo) {
+        foreach ($relative in $gitInfo.Files) {
+            Copy-PackageFile $root $package $relative
+        }
+        return
+    }
     $stack = New-Object System.Collections.Stack
     $stack.Push($root)
     while ($stack.Count -gt 0) {
@@ -109,28 +132,27 @@ $root = Resolve-Folder $Source
 $name = Split-Path -Leaf $root
 $isPlugin = (Test-Path -LiteralPath (Join-Path $root 'plugin.toml')) -and
     (Test-Path -LiteralPath (Join-Path $root 'plugin.py'))
+$packageId = if ($isPlugin) { Get-PluginId $root $name } else { $name }
 $version = Get-Version $root
 $dist = Join-Path $root 'dist'
 $null = New-Item -ItemType Directory -Path $dist -Force
-$zip = Join-Path $dist ($name + '-' + $version + '.zip')
+$zip = Join-Path $dist ($packageId + '-' + $version + '.zip')
 if (Test-Path -LiteralPath $zip) { Remove-Item -LiteralPath $zip -Force }
 
 $stage = Join-Path $env:TEMP ('folder_pack_' + [guid]::NewGuid().ToString('N'))
-$package = Join-Path $stage $name
+$package = Join-Path $stage $packageId
+$gitInfo = $null
 try {
     $null = New-Item -ItemType Directory -Path $package -Force
-    if ($isPlugin) {
-        Copy-Plugin $root $package
-    } else {
-        $ignoreFile = Join-Path $root '.packageignore'
-        $script:IgnorePatterns = @()
-        if (Test-Path -LiteralPath $ignoreFile) {
-            $script:IgnorePatterns = @(Get-Content -LiteralPath $ignoreFile -Encoding UTF8 |
-                ForEach-Object { $_.Trim() } |
-                Where-Object { $_ -and -not $_.StartsWith('#') })
-        }
-        Copy-Generic $root $package
+    $ignoreFile = Join-Path $root '.packageignore'
+    $script:IgnorePatterns = @()
+    if (Test-Path -LiteralPath $ignoreFile) {
+        $script:IgnorePatterns = @(Get-Content -LiteralPath $ignoreFile -Encoding UTF8 |
+            ForEach-Object { $_.Trim() } |
+            Where-Object { $_ -and -not $_.StartsWith('#') })
     }
+    $gitInfo = Get-GitFiles $root
+    Copy-Generic $root $package $gitInfo
     $count = (Get-ChildItem -LiteralPath $package -Recurse -File | Measure-Object).Count
     Compress-Archive -Path $package -DestinationPath $zip -CompressionLevel Optimal
 } finally {
@@ -141,6 +163,7 @@ try {
 
 Write-Host ''
 Write-Host ('OK: ' + $zip)
-Write-Host ('mode: ' + $(if ($isPlugin) { 'plugin' } else { 'folder' }))
+$mode = if ($isPlugin) { 'plugin' } elseif ($gitInfo) { 'git' } else { 'folder' }
+Write-Host ('mode: ' + $mode)
 Write-Host ('files: ' + $count)
 Write-Host 'Install via the target app if it supports this ZIP layout.'

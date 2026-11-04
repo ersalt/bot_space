@@ -121,11 +121,20 @@ token 绑定会话和操作，15 分钟过期。token 只是操作确认凭证�
 它会自动判断两种模式：
 
 - **插件模式**：文件夹里有 `plugin.toml` 和 `plugin.py`（qq-bot-lite 插件）。
-  只收 `plugin.toml`、`plugin.py`、`core/`、`pages/`、README、CHANGELOG、LICENSE，
-  版本号从 `plugin.toml` 读。
-- **通用模式**：其他项目。收整个文件夹，但默认排除 `.git`、`.github`、`.venv`、`node_modules`、
-  `dist`、`build`、`logs`、`tests`、`docs`、`tools`、缓存和临时文件。
-  版本号优先读 `VERSION`，没有就用时间戳。
+  按 git/默认排除收运行时文件，版本号从 `plugin.toml` 读；有 `id` 时用 `id` 作 ZIP 顶层目录，
+  没有就用文件夹名。
+- **通用模式**：其他项目。
+  - 如果文件夹是 git 仓库，直接调用
+    `git ls-files --cached --others --exclude-standard`，自动遵守 `.gitignore`
+    （包括嵌套 `.gitignore` 和全局 git 排除规则）。
+  - 不是 git 仓库时，退回默认排除和 `.packageignore`；不再解析 `.gitignore`，
+    因为没有 git 时它没有实际执行者。
+  - 两种情况都会再叠加打包专用排除：`.git`、`.github`、`.venv`、`node_modules`、
+    `dist`、`build`、`logs`、`tests`、`docs`、`tools`、缓存和临时文件。
+  - 版本号优先读 `VERSION`，没有就用时间戳。
+
+> `.gitignore` 不是打包清单：它只管 git 未跟踪文件。已经被 git 跟踪的 `tests/`、`docs/`
+> 仍会出现在 `git ls-files` 里，所以打包工具还会按上面的规则把它们排掉。
 
 输出：
 
