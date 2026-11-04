@@ -60,9 +60,10 @@ D:\Dev\qq-bot-lite\.venv\Scripts\python.exe -m app.pluginkit.check D:\Dev\bot_sp
 8. **不引入依赖**：只用标准库 + 主程序已装的包；面板不引 CDN/外部字体/图标库。
 9. **system 只加固定说明。** `SPACE_CHARTER` 是逐字稳定的自主权说明和删除授权协议，不拼时间/文件/群名；
    `autonomy_guard=false` 时不注入。不要把它挪到 `user_suffix` 或每次动态拼。
-10. **删除/修改授权在提示词层。** 规则是“读出具体内容 + 等对方下一条明确确认 + 第三方代删直接拒绝”。
-    `space_edit` / `space_delete` / `space_purge` 第一次调用只返回预览 + `confirm_token`，不执行；
-    确认后带 token 再调。不要为了省 token 删掉这段；它降低被忽悠概率，但不是硬 ACL。
+10. **删除/修改授权在提示词层。** 规则是“先分内容归属 + 展示完整 preview + 结束本轮 +
+    下一条明确确认 + 第三方代删拒绝”。`space_edit` 删一行也算删除；确认≠授权；
+    无法判断归属就保留原文。`space_edit` / `space_delete` / `space_purge` 第一次调用只返回
+    预览 + `confirm_token`，不执行；确认后带 token 再调。它降低被忽悠概率，但不是硬 ACL。
 
 ## 常见坑
 

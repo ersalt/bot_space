@@ -180,6 +180,8 @@ async def test_delete_requires_confirmation(store: SpaceStore) -> None:
     first = await _tool(tools, "space_delete").handler(ctx, {"path": "a.md"})
     assert first["needs_confirmation"] is True
     assert first["confirm_token"]
+    assert "结束本轮" in first["message"]
+    assert "确认不代表删除授权" in first["message"]
     assert first["preview"]["path"] == "a.md"
     assert "保留内容" in first["preview"]["preview"]
     assert store.read("a.md")["content"] == "保留内容"
@@ -315,6 +317,7 @@ def test_schemas_are_openai_functions(store: SpaceStore) -> None:
     assert edit.parameters["required"] == ["path", "old", "new"]
     assert edit.read_only is False
     assert "确认" in edit.description
+    assert "删行也属于删除" in edit.description
     delete = _tool(tools, "space_delete")
     assert delete.parameters["required"] == ["path"]
     assert delete.read_only is False
