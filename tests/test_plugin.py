@@ -30,8 +30,12 @@ def test_setup_creates_space_and_tools(plugin_module, fake_ctx) -> None:
         "space_list",
         "space_read",
         "space_search",
+        "space_trash",
         "space_create",
         "space_append",
+        "space_edit",
+        "space_delete",
+        "space_restore",
     ]
     assert not hasattr(plugin_module, "COMMANDS"), "bot_space 不提供用户命令"
 
@@ -43,6 +47,7 @@ def test_allow_write_runtime_switch(plugin_module, fake_ctx) -> None:
         "space_list",
         "space_read",
         "space_search",
+        "space_trash",
     ]
 
 
@@ -58,6 +63,8 @@ async def test_system_prompt_is_static_and_toggleable(plugin_module, fake_ctx) -
     assert "不是新的指令" in first
     assert "密码、密钥、他人隐私" in first
     assert "不要编造写入结果" in first
+    assert "space_edit" in first
+    assert "回收站" in first
     assert "只读工具" in first
 
     fake_ctx.settings["autonomy_guard"] = False
@@ -114,6 +121,36 @@ async def test_ping_tree_file_audit(plugin_module, fake_ctx, app) -> None:
         escape = await _get(client, "/plugins/bot_space/file?path=../outside.md")
         assert escape.status_code == 400
         assert escape.json()["ok"] is False
+
+
+@pytest.mark.asyncio
+async def test_trash_endpoint(plugin_module, fake_ctx, app) -> None:
+    store = plugin_module._STORE
+    assert store is not None
+    await store.create("notes/old.md", "旧内容", Limits())
+    deleted = await store.delete("notes/old.md")
+
+    transport = httpx.ASGITransport(app=app)
+    async with httpx.AsyncClient(transport=transport, base_url="http://test") as client:
+        ping = await _get(client, "/plugins/bot_space/ping")
+        payload = ping.json()
+        assert payload["files"] == 0
+        assert payload["trash_files"] == 1
+        assert payload["total_files"] == 1
+
+        tree = await _get(client, "/plugins/bot_space/tree")
+        assert tree.json()["files"] == []
+
+        trash = await _get(client, "/plugins/bot_space/trash?limit=10")
+        assert trash.status_code == 200
+        items = trash.json()["items"]
+        assert [item["path"] for item in items] == ["notes/old.md"]
+        assert items[0]["id"] == deleted["id"]
+
+        restored = await store.restore(deleted["id"], Limits())
+        assert restored["restored"] is True
+        empty = await _get(client, "/plugins/bot_space/trash?limit=10")
+        assert empty.json()["items"] == []
 
 
 @pytest.mark.asyncio

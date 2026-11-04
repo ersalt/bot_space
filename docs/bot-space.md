@@ -1,8 +1,7 @@
 # bot_space 设计交接（Phase 2 已实现）
 
-> 状态：2026-11-05 已在 `D:\Dev\bot_space` 实现 v0.1.4（显示名「BOT空间」，五个工具、只读面板、测试、部署脚本）。
-> 手记**全局一份，不分群聊私聊**；插件侧不按 `is_group` 限制。当前宿主仍只在私聊暴露工具，
-> 放开群聊需要用户手动改主项目，见本仓库 `docs/host-group-tools.md`。
+> 状态：2026-11-05 已在 `D:\Dev\bot_space` 实现 v0.2.0（显示名「BOT空间」，九个工具、只读面板、回收站、测试、部署脚本）。
+> 手记**全局一份，不分群聊私聊**；插件侧不按 `is_group` 限制。主项目 `_tools_for` 已对所有会话暴露工具。
 > 部署与启用由使用者手动执行；本工作区只改插件仓库，不修改主项目、不自动写入
 > `qq-bot-lite\plugins\bot_space`。
 > 主项目：`D:\Dev\qq-bot-lite`（只读依赖，仅作项目用途）。
@@ -83,11 +82,11 @@ qq-bot-lite 的定位是本地轻量 QQ 机器人：OneBot 11 + FastAPI + SQLite
 
 - 不做 OS 沙箱、容器、独立用户。
 - 不做 shell / Python 执行 / 网络访问。
-- 不做通用文件管理器（重命名、移动、任意删除、二进制、图片）。
+- 不做通用文件管理器（重命名、移动、二进制、图片）；删除只到回收站，不做永久删除。
 - 不做用户命令触发。
 - 不主动发 QQ 消息（v1）。
 - 不接 MCP（进程内插件不需要）。
-- 不让模型 delete / overwrite 已有文件。
+- 不让模型永久 delete / 任意 overwrite 已有文件；修改用 `space_edit` 精确替换，删除是软删除。
 
 ---
 
@@ -227,8 +226,8 @@ TOOLS = [
 - **手记只有一份，像家一样，不分群聊私聊。** 存储按 bot 全局，不按会话分区；
   工具在哪个会话被调用，只影响审计里的 `session` 字段，不影响读写的根目录。
 - 插件侧**不按 `is_group` 限制**：模型在群聊/私聊都可以 list/read/search/create/append。
-- 当前宿主 `ChatService._tools_for` 仍在群聊返回空，这是主项目需要手动改的一处；
-  插件工作区不能改主项目，补丁与风险见本仓库 `docs/host-group-tools.md`。
+- 主项目 `ChatService._tools_for` 已改为所有会话暴露；保留 `event` 参数供以后做全局策略，
+  但不要再用 `is_group` 决定给不给工具。
 - 群聊写风险：任何群友都可能诱导模型写手记；`allow_write` 是全局开关。若要
   「群聊只读/仅管理员写」这种粒度，需要宿主按会话或权限过滤工具，插件拿不到这个决策点。
 - 是否调用由模型决定；用户不打命令，最多自然语言说「记一下」，模型自己判断。
@@ -247,7 +246,7 @@ TOOLS = [
 api = 2
 title = "BOT空间"
 description = "模型自己决定写什么的 Markdown 手记；用户只读查看。"
-version = "0.1.4"
+version = "0.2.0"
 panel = "/plugins/bot_space"
 
 [[config]]
@@ -282,10 +281,14 @@ default = 64
 | `space_read` | 读一篇 `.md` | 单次默认 6000 字，可配；超出用 offset 续读 |
 | `space_search` | 关键词搜索 | 最多返回 N 条，带路径和行号 |
 | `space_create` | 新建 `.md` | 已存在则失败，不覆盖 |
-| `space_append` | 追加 `.md` | 不存在则创建；这是模型最常用的写工具 |
+| `space_append` | 追加 `.md` | 不存在则创建；只用于新增 |
+| `space_edit` | 精确修改 | `old`→`new`；命中多处需 `all=true` |
+| `space_delete` | 软删除 | 移到 `.trash/`，可恢复 |
+| `space_trash` | 回收站列表 | id、原路径、大小、删除时间；只读 |
+| `space_restore` | 恢复 | 用 id 恢复到原路径；目标已存在则失败 |
 
-**不给模型**：delete、overwrite、rename、move、任意扩展名、二进制、图片。
-删除/清空只通过「删插件数据」这个宿主生命周期操作完成；面板也不提供编辑/触发。
+**不给模型**：永久删除、rename、move、任意扩展名、二进制、图片。
+删除/清空整份数据仍可通过「删插件数据」这个宿主生命周期操作完成；面板不提供编辑/触发。
 
 ### 5.3 目录
 
@@ -294,6 +297,7 @@ data/plugin_data/bot_space/
   space/
     notes/                模型自己的笔记
     journal/              可选：自主日记
+    .trash/<id>/          回收站：meta.json + content.md
     .audit.jsonl          工具审计
   settings.toml           插件设置（宿主管理）
 ```
@@ -303,12 +307,13 @@ data/plugin_data/bot_space/
 - 只允许 `.md`；文件名 slug 化；Windows 保留名（CON/NUL/COM1…）、结尾空格/点拒绝。
 - `Path.resolve()` 后 `relative_to(root)`；任一路径段是符号链接/junction 就拒绝。
 - 原子写：同目录临时文件 + `os.replace`；同一路径用 `asyncio.Lock` 串行。
-- 单文件 64KB（可配）、总文件 200、总量 10MB；超出返回明确错误给模型。
+- 单文件 64KB（可配）、总文件 200、总量 10MB（可配，均含回收站）；超出返回明确错误给模型。
 - 读结果、搜索结果都设上限，避免把上下文撑爆。
 
 ### 5.4 只读面板
 
-- `pages/index.html`：左侧文件树，右侧 Markdown 原文/预览，顶部显示用量和审计入口。
+- `pages/index.html`：左侧文件树，右侧 Markdown 原文/预览，顶部显示用量、回收站和审计入口。
+- 回收站弹窗只读列出被删除文件；恢复由模型调用 `space_restore`，面板不提供恢复按钮。
 - 只读：没有编辑框、没有新建/删除按钮、没有「让 bot 写」的触发。
 - 可以显示「这是 bot 的手记；要清空请到插件卡片删除数据」。
 - 面板接口全部 GET；不要提供 POST 写接口，减少误用面。
@@ -331,9 +336,10 @@ data/plugin_data/bot_space/
 - **工具表就是权限表。** 删掉 `TOOLS` 里的某项，模型 schema 里就没有它；调用未知工具直接拒绝。
 - 配置开关是运行时权限：`allow_write=false` 时只暴露读工具。
 - 固定根目录是防误伤，不是安全沙箱；不要对外宣称「沙箱」。
-- 模型侧永远没有 delete / overwrite；删除只能由宿主删插件数据完成。
+- 模型侧没有永久 delete / 任意 overwrite；修改用 `space_edit`，删除只到回收站。
+  删除整份数据只能由宿主删插件数据完成。
 - 手记全局一份；群聊/私聊共用同一个根目录，只有审计的 `session` 不同。
-- 工具暴露不按会话类型硬编码；当前宿主仍限私聊，放开方式见 `docs/host-group-tools.md`。
+- 工具暴露不按会话类型硬编码；主项目 `_tools_for` 已对所有会话暴露。
 - 插件代码本身仍是受信代码；如果以后要装不可信插件，才需要 OS 级隔离，那是另一个架构。
 
 ---
@@ -355,7 +361,7 @@ data/plugin_data/bot_space/
 - 工具结果不塞 system；只在本次 tool 消息里。
 - 模型没有调用工具时，行为和现在完全一样。
 - 单轮工具循环会多花模型请求；日志记录轮数和耗时，方便评估是否值得。
-- 工具暴露不按会话类型硬编码；当前宿主仍限私聊，放开方式见 `docs/host-group-tools.md`。
+- 工具暴露不按会话类型硬编码；主项目已对所有会话暴露。
 
 ---
 
@@ -461,7 +467,7 @@ D:\Dev\qq-bot-lite\.venv\Scripts\python.exe -m pytest -q
 - 不把 `space_*` 工具写进主项目核心。
 - 不做用户 `/space` 命令。
 - 不做 OS 沙箱，不承诺插件代码隔离。
-- 不做 delete/overwrite/rename 的模型工具。
+- 不做永久 delete/overwrite/rename 的模型工具；只有软删除 + 精确编辑。
 - 不做流式 tool_calls（第一期）。
 - 不做主动 QQ 推送（第一期）。
 - 不把工具对话写进持久历史。

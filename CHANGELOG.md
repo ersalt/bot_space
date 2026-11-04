@@ -2,6 +2,23 @@
 
 按 [Keep a Changelog](https://keepachangelog.com/zh-CN/1.1.0/) 记录；版本号语义化。
 
+## 0.2.0 — 2026-11-05
+
+### 新增
+
+- `space_edit(path, old, new, all=false)`：精确替换原文，支持删掉某一行；找不到或多处未开 `all`
+  都返回明确错误，不再只能用 append 追加“更正”。
+- `space_delete(path)`：软删除到 `.trash/<id>/`，保留原路径和删除时间。
+- `space_trash`：模型可查看回收站（id、原路径、大小、删除时间）。
+- `space_restore(id)`：恢复到原路径；目标已存在时失败，不覆盖。
+- 面板新增只读「回收站」弹窗；用量条计入回收站。
+
+### 变更
+
+- 回收站也计入文件数和总量配额，避免反复删除撑大磁盘。
+- `space_append` 说明改为“只用于新增”；修改已有内容引导到 `space_edit`。
+- system prompt 补充 `space_edit` / 回收站规则。
+
 ## 0.1.4 — 2026-11-05
 
 ### 新增

@@ -300,6 +300,40 @@
 .audit-bad { color: var(--danger); }
 .audit-modal .dialog-panel > footer .dirty-label { margin-right: auto; }
 
+/* ---------- 回收站弹窗 ---------- */
+
+.trash-modal { width: min(820px, 100%); }
+.trash-modal .dialog-panel > section { padding: 4px 20px 12px; overflow-x: auto; }
+.trash-head, .trash-row {
+  display: grid;
+  grid-template-columns: 178px minmax(0, 1fr) 72px 118px;
+  gap: 10px;
+  align-items: center;
+  min-width: 560px;
+}
+.trash-head {
+  padding: 0 2px 8px;
+  border-bottom: 1px solid var(--border);
+  font-family: var(--font-mono);
+  font-size: 10.5px;
+  color: var(--muted);
+}
+.trash-row { padding: 9px 2px; border-bottom: 1px solid var(--hairline); font-size: 12px; }
+.trash-id,
+.trash-path,
+.trash-size,
+.trash-time {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  font-family: var(--font-mono);
+  font-size: 10.5px;
+}
+.trash-id { color: var(--muted); }
+.trash-size { text-align: right; }
+.trash-time { color: var(--muted); }
+.trash-modal .dialog-panel > footer .dirty-label { margin-right: auto; }
+
 /* ---------- 窄屏 ---------- */
 
 @media (min-width: 921px) {
@@ -323,7 +357,7 @@
 <body>
 
 <header class="topbar">
-  <div class="brand">BOT空间 <span class="ver" id="brand-version">v0.1.4</span></div>
+  <div class="brand">BOT空间 <span class="ver" id="brand-version">v0.2.0</span></div>
   <span class="tb-sep"></span>
   <span class="tb-scope">手记</span>
   <div class="tb-right">
@@ -347,13 +381,14 @@
       <p class="sub">模型自己决定写不写；这里只能看，不提供编辑和删除。要清空，到插件卡片删除插件数据。</p>
     </div>
     <div class="head-actions">
+      <button class="btn" data-variant="outline" id="trash-btn" type="button">回收站</button>
       <button class="btn" data-variant="outline" id="refresh" type="button">刷新</button>
     </div>
   </div>
 
   <div class="notice" role="note">
     <span class="notice-mark">i</span>
-    <span>只读面板：没有编辑、新建、删除按钮。文件由模型在会话里通过 <code>space_*</code> 工具读写；群聊和私聊共用同一份手记（群聊需宿主放开工具）。</span>
+    <span>只读面板：没有编辑、新建、删除按钮。文件由模型在会话里通过 <code>space_*</code> 工具读写；删除只是移入回收站，模型可以用 <code>space_restore</code> 反悔。群聊和私聊共用同一份手记。</span>
   </div>
 
   <section class="card usage" aria-label="手记用量">
@@ -422,7 +457,7 @@
 
   <footer class="foot">
     <span>根目录 <code>data/plugin_data/bot_space/space</code></span>
-    <span>只读 · <span id="foot-version">v0.1.4</span></span>
+    <span>只读 · <span id="foot-version">v0.2.0</span></span>
   </footer>
 </main>
 
@@ -440,6 +475,25 @@
     <footer>
       <span class="dirty-label" id="audit-hint"></span>
       <button class="btn" data-variant="outline" type="button" id="audit-refresh">刷新</button>
+      <button class="btn" type="button" data-close>关闭</button>
+    </footer>
+  </div>
+</dialog>
+
+<dialog class="modal trash-modal" id="trash-mask">
+  <div class="dialog-panel">
+    <header>
+      <h2>回收站</h2>
+      <p>删除的文件在这里；模型可以用 space_trash 查看、space_restore 恢复。面板只读。</p>
+    </header>
+    <section>
+      <div id="trash-list">
+        <div class="blank-card">读取中…</div>
+      </div>
+    </section>
+    <footer>
+      <span class="dirty-label" id="trash-hint"></span>
+      <button class="btn" data-variant="outline" type="button" id="trash-refresh">刷新</button>
       <button class="btn" type="button" data-close>关闭</button>
     </footer>
   </div>
@@ -528,18 +582,23 @@ function setStatus(text, ok) {
 
 function renderUsage(info) {
   state.stats = info;
+  const trashFiles = info.trash_files || 0;
+  const trashBytes = info.trash_bytes || 0;
+  const usedFiles = info.total_files ?? info.files;
+  const usedBytes = info.total_bytes ?? info.bytes;
   $("stat-files").textContent = info.files;
-  $("stat-files-note").textContent = `上限 ${info.max_files}`;
+  $("stat-files-note").textContent = `上限 ${info.max_files}${trashFiles ? ` · 回收站 ${trashFiles}` : ""}`;
   $("stat-bytes").textContent = formatBytes(info.bytes);
-  $("stat-bytes-note").textContent = `上限 ${formatBytes(info.max_total_bytes)}`;
+  $("stat-bytes-note").textContent = `上限 ${formatBytes(info.max_total_bytes)}${trashBytes ? ` · 回收站 ${formatBytes(trashBytes)}` : ""}`;
   $("stat-updated").textContent = info.updated ? formatTime(info.updated) : "还没有文件";
-  $("stat-line").textContent = `${info.files} 篇 · ${formatBytes(info.bytes)}`;
+  $("stat-line").textContent = `${info.files} 篇 · ${formatBytes(info.bytes)}${trashFiles ? ` · 回收站 ${trashFiles}` : ""}`;
   $("files-meta").textContent = `${info.files} 篇 · ${formatBytes(info.bytes)}`;
   $("mode-note").textContent = info.allow_write ? "模型可写" : "模型只读";
   $("brand-version").textContent = `v${info.version}`;
   $("foot-version").textContent = `v${info.version}`;
-  const filePct = info.max_files ? Math.min(100, (info.files / info.max_files) * 100) : 0;
-  const bytePct = info.max_total_bytes ? Math.min(100, (info.bytes / info.max_total_bytes) * 100) : 0;
+  $("trash-btn").textContent = trashFiles ? `回收站 ${trashFiles}` : "回收站";
+  const filePct = info.max_files ? Math.min(100, (usedFiles / info.max_files) * 100) : 0;
+  const bytePct = info.max_total_bytes ? Math.min(100, (usedBytes / info.max_total_bytes) * 100) : 0;
   setBar("bar-files", "pct-files", filePct);
   setBar("bar-bytes", "pct-bytes", bytePct);
 }
@@ -923,6 +982,68 @@ function renderAudit(items) {
   $("audit-hint").textContent = `最近 ${items.length} 条`;
 }
 
+/* ---------- 回收站 ---------- */
+
+async function openTrash() {
+  const dialog = $("trash-mask");
+  if (!dialog.open) dialog.showModal();
+  await loadTrash();
+}
+
+async function loadTrash() {
+  const list = $("trash-list");
+  list.replaceChildren(blank("读取中…", "正在取回收站。"));
+  $("trash-hint").textContent = "";
+  try {
+    const data = await api("./trash?limit=50");
+    renderTrash(data.items || [], data.total || 0);
+  } catch (error) {
+    list.replaceChildren(blank("读不到回收站", error.message));
+  }
+}
+
+function renderTrash(items, total) {
+  const list = $("trash-list");
+  list.replaceChildren();
+  if (!items.length) {
+    list.appendChild(blank("回收站是空的", "删除文件后会出现在这里，模型可以恢复。"));
+    $("trash-hint").textContent = "0 条";
+    return;
+  }
+  const head = document.createElement("div");
+  head.className = "trash-head";
+  ["id", "原路径", "大小", "删除时间"].forEach((text) => {
+    const cell = document.createElement("span");
+    cell.textContent = text;
+    head.appendChild(cell);
+  });
+  list.appendChild(head);
+  items.forEach((item) => {
+    const row = document.createElement("div");
+    row.className = "trash-row";
+    const id = document.createElement("span");
+    id.className = "trash-id";
+    id.textContent = item.id || "-";
+    id.title = item.id || "";
+    const path = document.createElement("span");
+    path.className = "trash-path";
+    path.textContent = item.path || "-";
+    path.title = item.path || "-";
+    const size = document.createElement("span");
+    size.className = "trash-size";
+    size.textContent = formatBytes(item.size);
+    const time = document.createElement("span");
+    time.className = "trash-time";
+    time.textContent = formatTime(item.deleted_at);
+    time.title = item.deleted_at || "";
+    row.append(id, path, size, time);
+    list.appendChild(row);
+  });
+  $("trash-hint").textContent = total > items.length
+    ? `显示最近 ${items.length} / ${total} 条`
+    : `${total} 条`;
+}
+
 /* ---------- 主题 / 全屏 ---------- */
 
 function applyTheme(theme) {
@@ -982,6 +1103,8 @@ function renderTreeError(message) {
 /* ---------- 事件 ---------- */
 
 $("refresh").addEventListener("click", () => loadAll());
+$("trash-btn").addEventListener("click", openTrash);
+$("trash-refresh").addEventListener("click", loadTrash);
 $("audit-btn").addEventListener("click", openAudit);
 $("audit-refresh").addEventListener("click", loadAudit);
 $("filter").addEventListener("input", () => {

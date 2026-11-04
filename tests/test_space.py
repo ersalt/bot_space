@@ -124,6 +124,85 @@ async def test_append_creates_and_separates(store: SpaceStore) -> None:
 
 
 @pytest.mark.asyncio
+async def test_edit_replaces_unique(store: SpaceStore) -> None:
+    await store.create("notes/list.md", "1. 贰叔\n2. 饺子\n", LIMITS)
+    result = await store.edit("notes/list.md", "2. 饺子\n", "", LIMITS)
+    assert result["replaced"] == 1
+    assert store.read("notes/list.md")["content"] == "1. 贰叔\n"
+
+
+@pytest.mark.asyncio
+async def test_edit_requires_unique_or_all(store: SpaceStore) -> None:
+    await store.create("a.md", "x\nx\n", LIMITS)
+    with pytest.raises(SpaceError, match="命中 2 处"):
+        await store.edit("a.md", "x", "y", LIMITS)
+    result = await store.edit("a.md", "x", "y", LIMITS, replace_all=True)
+    assert result["replaced"] == 2
+    assert store.read("a.md")["content"] == "y\ny\n"
+
+
+@pytest.mark.asyncio
+async def test_edit_missing_old(store: SpaceStore) -> None:
+    await store.create("a.md", "正文", LIMITS)
+    with pytest.raises(SpaceError, match="没有找到"):
+        await store.edit("a.md", "不存在", "x", LIMITS)
+
+
+@pytest.mark.asyncio
+async def test_delete_and_restore(store: SpaceStore) -> None:
+    await store.create("notes/temp.md", "内容", LIMITS)
+    deleted = await store.delete("notes/temp.md")
+    assert deleted["restorable"] is True
+    assert deleted["path"] == "notes/temp.md"
+    assert not (store.root / "notes" / "temp.md").exists()
+    assert store.list_files()["total"] == 0
+    assert store.search("内容")["total"] == 0
+
+    trash = store.trash_items()
+    assert trash["total"] == 1
+    item = trash["items"][0]
+    assert item["id"] == deleted["id"]
+    assert item["path"] == "notes/temp.md"
+
+    restored = await store.restore(item["id"], LIMITS)
+    assert restored["restored"] is True
+    assert restored["path"] == "notes/temp.md"
+    assert store.read("notes/temp.md")["content"] == "内容"
+    assert store.trash_items()["total"] == 0
+
+
+@pytest.mark.asyncio
+async def test_restore_refuses_existing_target(store: SpaceStore) -> None:
+    await store.create("a.md", "旧", LIMITS)
+    deleted = await store.delete("a.md")
+    await store.create("a.md", "新", LIMITS)
+    with pytest.raises(SpaceError, match="已存在"):
+        await store.restore(deleted["id"], LIMITS)
+    assert store.read("a.md")["content"] == "新"
+    assert store.trash_items()["total"] == 1
+
+
+@pytest.mark.asyncio
+async def test_quota_counts_trash(store: SpaceStore) -> None:
+    small = Limits(max_files=1)
+    await store.create("a.md", "a", small)
+    await store.delete("a.md")
+    stats = store.stats(small)
+    assert stats["files"] == 0
+    assert stats["trash_files"] == 1
+    assert stats["total_files"] == 1
+    with pytest.raises(SpaceError, match="文件数"):
+        await store.create("b.md", "b", small)
+
+
+@pytest.mark.asyncio
+async def test_delete_missing(store: SpaceStore) -> None:
+    with pytest.raises(SpaceError) as error:
+        await store.delete("nope.md")
+    assert error.value.code == "missing"
+
+
+@pytest.mark.asyncio
 async def test_read_offset_and_truncation(store: SpaceStore) -> None:
     await store.create("a.md", "0123456789", LIMITS)
     data = store.read("a.md", offset=3, limit=4)

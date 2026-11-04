@@ -19,12 +19,14 @@ import asyncio
 import json
 import os
 import re
+import shutil
 import tempfile
 import unicodedata
 from dataclasses import dataclass
 from datetime import datetime
 from pathlib import Path
 from typing import Any, Iterator
+from uuid import uuid4
 
 MD_SUFFIX = ".md"
 MAX_DEPTH = 3  # 根目录之下最多两层子目录 + 文件名
@@ -37,6 +39,12 @@ AUDIT_ROTATE_BYTES = 2 * 1024 * 1024
 AUDIT_KEEP_LINES = 1000
 AUDIT_MAX_RECORDS = 200
 TITLE_LIMIT = 60
+TRASH_DIR = ".trash"
+TRASH_META = "meta.json"
+TRASH_CONTENT = "content.md"
+TRASH_LIST_LIMIT = 40
+TRASH_MAX_ITEMS = 200
+TRASH_ID_RE = re.compile(r"^\d{8}-\d{6}-[0-9a-f]{6}$")
 
 WINDOWS_RESERVED = {
     "con",
@@ -249,6 +257,7 @@ class SpaceStore:
         self.log = log
         self._prepared = False
         self._locks: dict[str, asyncio.Lock] = {}
+        self._trash_lock = asyncio.Lock()
         self._audit_writes = 0
 
     # ---------- 基础设施 ----------
@@ -315,6 +324,22 @@ class SpaceStore:
                 if not _is_link(path):
                     yield path
 
+    def _iter_trash_content(self) -> Iterator[Path]:
+        trash = self.root / TRASH_DIR
+        if not trash.is_dir():
+            return
+        for folder in sorted(trash.iterdir()):
+            if not folder.is_dir() or not TRASH_ID_RE.match(folder.name):
+                continue
+            content = folder / TRASH_CONTENT
+            if content.is_file() and not _is_link(content):
+                yield content
+
+    def _iter_all_md(self) -> Iterator[Path]:
+        """活跃文件 + 回收站文件；配额按两者一起算，回收站不能无限膨胀。"""
+        yield from self._iter_md()
+        yield from self._iter_trash_content()
+
     def _sorted_md(self) -> list[Path]:
         paths = list(self._iter_md())
 
@@ -352,7 +377,7 @@ class SpaceStore:
         try:
             path.parent.mkdir(parents=True, exist_ok=True)
             handle_fd, temp_name = tempfile.mkstemp(
-                prefix=".tmp-", suffix=".md", dir=str(path.parent)
+                prefix=".tmp-", suffix=path.suffix or ".tmp", dir=str(path.parent)
             )
         except OSError as exc:
             raise SpaceError(f"目录创建失败：{exc}") from exc
@@ -385,12 +410,12 @@ class SpaceStore:
         if projected_files > limits.max_files:
             raise SpaceError(
                 f"文件数最多 {limits.max_files} 篇，已经用满；"
-                "模型没有删除权限，需要用户在插件卡片里清空数据或调大配额"
+                "回收站也计入配额，模型移入回收站不会释放；需要用户清理数据或调大配额"
             )
         if projected_bytes > limits.max_total_bytes:
             limit_mb = limits.max_total_bytes // 1048576
             raise SpaceError(
-                f"手记总量最多 {limit_mb}MB，已经用满；"
+                f"手记总量最多 {limit_mb}MB（含回收站），已经用满；"
                 "需要用户清理数据或调大配额"
             )
 
@@ -398,19 +423,32 @@ class SpaceStore:
 
     def stats(self, limits: Limits) -> dict[str, Any]:
         self._ready()
-        files = list(self._iter_md())
-        total = 0
+        live = list(self._iter_md())
+        trash = list(self._iter_trash_content())
+        live_bytes = 0
+        trash_bytes = 0
         latest = 0.0
-        for path in files:
+        for path in live:
             try:
                 stat = path.stat()
             except OSError:
                 continue
-            total += stat.st_size
+            live_bytes += stat.st_size
+            latest = max(latest, stat.st_mtime)
+        for path in trash:
+            try:
+                stat = path.stat()
+            except OSError:
+                continue
+            trash_bytes += stat.st_size
             latest = max(latest, stat.st_mtime)
         return {
-            "files": len(files),
-            "bytes": total,
+            "files": len(live),
+            "bytes": live_bytes,
+            "trash_files": len(trash),
+            "trash_bytes": trash_bytes,
+            "total_files": len(live) + len(trash),
+            "total_bytes": live_bytes + trash_bytes,
             "max_files": limits.max_files,
             "max_total_bytes": limits.max_total_bytes,
             "max_file_bytes": limits.max_file_bytes,
@@ -543,7 +581,7 @@ class SpaceStore:
             path = self._resolve(rel)
             if path.exists():
                 raise SpaceError(f"已存在：{rel}；要补充内容请用 space_append", code="exists")
-            files = list(self._iter_md())
+            files = list(self._iter_all_md())
             total = _total_bytes(files)
             self._check_limits(
                 limits,
@@ -581,7 +619,7 @@ class SpaceStore:
                 body += "\n"
             payload = body.encode("utf-8")
             self._check_file_size(len(payload), limits)
-            files = list(self._iter_md())
+            files = list(self._iter_all_md())
             total = _total_bytes(files)
             self._check_limits(
                 limits,
@@ -590,6 +628,206 @@ class SpaceStore:
             )
             self._write_atomic(path, body)
             return {**self._file_info(path), "created": created, "chars": len(body_text)}
+
+    async def edit(
+        self,
+        raw_path: Any,
+        old: Any,
+        new: Any,
+        limits: Limits,
+        *,
+        replace_all: bool = False,
+    ) -> dict[str, Any]:
+        """精确替换；old 必须非空，命中多处时要求 replace_all。"""
+        self._ready()
+        rel = normalize_path(raw_path)
+        if not isinstance(old, str) or not old:
+            raise SpaceError("old 不能为空")
+        if not isinstance(new, str):
+            raise SpaceError("new 必须是字符串")
+        if len(new) > MAX_TEXT_CHARS:
+            raise SpaceError(f"new 太长（最多 {MAX_TEXT_CHARS} 字）")
+        async with self._lock(rel):
+            path = self._resolve(rel)
+            if not path.exists():
+                raise SpaceError(f"文件不存在：{rel}", code="missing")
+            if not path.is_file():
+                raise SpaceError(f"不是文件：{rel}")
+            try:
+                stat = path.stat()
+                if stat.st_size > MAX_READ_BYTES:
+                    raise SpaceError(f"文件超过 {MAX_READ_BYTES // 1024 // 1024}MB，不修改")
+                text = path.read_text(encoding="utf-8", errors="replace")
+            except OSError as exc:
+                raise SpaceError(f"读取失败：{exc}") from exc
+            count = text.count(old)
+            if count == 0:
+                raise SpaceError("没有找到 old 对应的文本；请先 space_read 再精确复制要改的片段")
+            if count > 1 and not replace_all:
+                raise SpaceError(
+                    f"old 命中 {count} 处，可能改错；请提供更长的上下文，或 all=true 全部替换"
+                )
+            body = text.replace(old, new) if replace_all else text.replace(old, new, 1)
+            payload = body.encode("utf-8")
+            self._check_file_size(len(payload), limits)
+            files = list(self._iter_all_md())
+            total = _total_bytes(files)
+            self._check_limits(
+                limits,
+                projected_files=len(files),
+                projected_bytes=total - stat.st_size + len(payload),
+            )
+            self._write_atomic(path, body)
+            return {
+                **self._file_info(path),
+                "replaced": count if replace_all else 1,
+                "chars": len(new),
+            }
+
+    async def delete(self, raw_path: Any) -> dict[str, Any]:
+        """软删除到 .trash/<id>/，保留原路径和删除时间，可用 restore 反悔。"""
+        self._ready()
+        rel = normalize_path(raw_path)
+        async with self._trash_lock:
+            async with self._lock(rel):
+                path = self._resolve(rel)
+                if not path.exists():
+                    raise SpaceError(f"文件不存在：{rel}", code="missing")
+                if not path.is_file():
+                    raise SpaceError(f"不是文件：{rel}")
+                try:
+                    stat = path.stat()
+                except OSError as exc:
+                    raise SpaceError(f"读取失败：{exc}") from exc
+                item_id = self._new_trash_id()
+                deleted_at = _now_iso()
+                folder = self.root / TRASH_DIR / item_id
+                meta = {
+                    "id": item_id,
+                    "path": rel,
+                    "size": stat.st_size,
+                    "deleted_at": deleted_at,
+                }
+                try:
+                    folder.mkdir(parents=True, exist_ok=False)
+                    self._write_atomic(
+                        folder / TRASH_META,
+                        json.dumps(meta, ensure_ascii=False, indent=2) + "\n",
+                    )
+                    os.replace(path, folder / TRASH_CONTENT)
+                except SpaceError:
+                    shutil.rmtree(folder, ignore_errors=True)
+                    raise
+                except OSError as exc:
+                    shutil.rmtree(folder, ignore_errors=True)
+                    raise SpaceError(f"移入回收站失败：{exc}") from exc
+                self._cleanup_empty_dirs(path.parent)
+                return {
+                    "id": item_id,
+                    "path": rel,
+                    "size": stat.st_size,
+                    "deleted_at": deleted_at,
+                    "restorable": True,
+                }
+
+    def trash_items(self, limit: int = TRASH_LIST_LIMIT) -> dict[str, Any]:
+        self._ready()
+        try:
+            limit = max(1, min(int(limit), TRASH_MAX_ITEMS))
+        except (TypeError, ValueError):
+            limit = TRASH_LIST_LIMIT
+        trash = self.root / TRASH_DIR
+        items: list[dict[str, Any]] = []
+        if trash.is_dir():
+            for folder in trash.iterdir():
+                if not folder.is_dir() or not TRASH_ID_RE.match(folder.name):
+                    continue
+                meta = _read_json(folder / TRASH_META)
+                content = folder / TRASH_CONTENT
+                if not isinstance(meta, dict) or not content.is_file():
+                    continue
+                raw_path = meta.get("path")
+                if not isinstance(raw_path, str):
+                    continue
+                try:
+                    rel = normalize_path(raw_path)
+                    size = content.stat().st_size
+                except (SpaceError, OSError):
+                    continue
+                items.append(
+                    {
+                        "id": folder.name,
+                        "path": rel,
+                        "size": size,
+                        "deleted_at": str(meta.get("deleted_at") or ""),
+                    }
+                )
+        items.sort(key=lambda item: item["deleted_at"], reverse=True)
+        return {
+            "items": items[:limit],
+            "total": len(items),
+            "truncated": len(items) > limit,
+        }
+
+    async def restore(self, item_id: Any, limits: Limits) -> dict[str, Any]:
+        self._ready()
+        ident = str(item_id or "").strip()
+        if not TRASH_ID_RE.match(ident):
+            raise SpaceError("回收站 id 不合法")
+        folder = self.root / TRASH_DIR / ident
+        meta = _read_json(folder / TRASH_META)
+        if not isinstance(meta, dict):
+            raise SpaceError(f"回收站记录不存在或损坏：{ident}", code="missing")
+        rel = normalize_path(meta.get("path"))
+        source = folder / TRASH_CONTENT
+        if not source.is_file():
+            raise SpaceError(f"回收站文件不存在：{ident}", code="missing")
+        try:
+            self._check_file_size(source.stat().st_size, limits)
+        except OSError as exc:
+            raise SpaceError(f"读取回收站文件失败：{exc}") from exc
+        async with self._trash_lock:
+            async with self._lock(rel):
+                target = self._resolve(rel)
+                if target.exists():
+                    raise SpaceError(
+                        f"恢复失败：{rel} 已存在；先处理现有文件再恢复",
+                        code="exists",
+                    )
+                try:
+                    target.parent.mkdir(parents=True, exist_ok=True)
+                    os.replace(source, target)
+                except OSError as exc:
+                    raise SpaceError(f"恢复失败：{exc}") from exc
+                for leftover in (folder / TRASH_META,):
+                    try:
+                        leftover.unlink(missing_ok=True)
+                    except OSError:
+                        pass
+                try:
+                    folder.rmdir()
+                except OSError:
+                    pass
+                return {**self._file_info(target), "id": ident, "restored": True}
+
+    def _new_trash_id(self) -> str:
+        trash = self.root / TRASH_DIR
+        for _ in range(5):
+            item_id = f"{datetime.now():%Y%m%d-%H%M%S}-{uuid4().hex[:6]}"
+            if not (trash / item_id).exists():
+                return item_id
+        raise SpaceError("回收站暂时不可用，请稍后再试")
+
+    def _cleanup_empty_dirs(self, folder: Path) -> None:
+        current = folder
+        while current != self.root:
+            try:
+                if any(current.iterdir()):
+                    return
+                current.rmdir()
+            except OSError:
+                return
+            current = current.parent
 
     # ---------- 审计 ----------
 
@@ -664,6 +902,13 @@ class SpaceStore:
         except OSError as exc:
             if self.log is not None:
                 self.log.warning("审计轮转失败：%s", exc)
+
+
+def _read_json(path: Path) -> Any:
+    try:
+        return json.loads(path.read_text(encoding="utf-8"))
+    except (OSError, ValueError):
+        return None
 
 
 def _total_bytes(paths: list[Path]) -> int:

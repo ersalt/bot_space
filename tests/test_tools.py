@@ -39,13 +39,23 @@ def _names(tools) -> list[str]:
 
 def test_read_tools_always_present(store: SpaceStore) -> None:
     tools = build_tools(store, lambda: {})
-    assert _names(tools) == ["space_list", "space_read", "space_search", "space_create", "space_append"]
+    assert _names(tools) == [
+        "space_list",
+        "space_read",
+        "space_search",
+        "space_trash",
+        "space_create",
+        "space_append",
+        "space_edit",
+        "space_delete",
+        "space_restore",
+    ]
 
 
 def test_allow_write_off_hides_write_tools(store: SpaceStore) -> None:
     settings = {"allow_write": False}
     tools = build_tools(store, lambda: settings)
-    assert _names(tools) == ["space_list", "space_read", "space_search"]
+    assert _names(tools) == ["space_list", "space_read", "space_search", "space_trash"]
     settings["allow_write"] = True
     assert "space_append" in _names(build_tools(store, lambda: settings))
     settings["allow_write"] = "false"
@@ -89,6 +99,52 @@ async def test_tools_roundtrip(store: SpaceStore) -> None:
     }
     assert all(item["ok"] for item in records)
     assert all(item["session"] == "private:1" for item in records)
+
+
+@pytest.mark.asyncio
+async def test_edit_delete_trash_restore_tools(store: SpaceStore) -> None:
+    tools = build_tools(store, lambda: {})
+    ctx = _ctx()
+    await _tool(tools, "space_append").handler(
+        ctx, {"path": "notes/list.md", "text": "1. 贰叔\n2. 饺子"}
+    )
+
+    edited = await _tool(tools, "space_edit").handler(
+        ctx, {"path": "notes/list.md", "old": "2. 饺子\n", "new": ""}
+    )
+    assert edited["replaced"] == 1
+    read = await _tool(tools, "space_read").handler(ctx, {"path": "notes/list.md"})
+    assert read["content"] == "1. 贰叔\n"
+
+    deleted = await _tool(tools, "space_delete").handler(ctx, {"path": "notes/list.md"})
+    assert deleted["restorable"] is True
+    assert store.list_files()["total"] == 0
+
+    trash = await _tool(tools, "space_trash").handler(ctx, {})
+    assert trash["total"] == 1
+    item = trash["items"][0]
+    assert item["path"] == "notes/list.md"
+
+    restored = await _tool(tools, "space_restore").handler(ctx, {"id": item["id"]})
+    assert restored["restored"] is True
+    read = await _tool(tools, "space_read").handler(ctx, {"path": "notes/list.md"})
+    assert read["content"] == "1. 贰叔\n"
+    assert any(item["tool"] == "space_restore" for item in store.recent_audit(10))
+
+
+@pytest.mark.asyncio
+async def test_edit_requires_unique_match(store: SpaceStore) -> None:
+    await store.create("a.md", "同一行\n同一行\n", store_limits())
+    tools = build_tools(store, lambda: {})
+    with pytest.raises(SpaceError, match="命中 2 处"):
+        await _tool(tools, "space_edit").handler(
+            _ctx(), {"path": "a.md", "old": "同一行", "new": "改"}
+        )
+    result = await _tool(tools, "space_edit").handler(
+        _ctx(), {"path": "a.md", "old": "同一行", "new": "改", "all": True}
+    )
+    assert result["replaced"] == 2
+    assert store.read("a.md")["content"] == "改\n改\n"
 
 
 @pytest.mark.asyncio
@@ -194,4 +250,14 @@ def test_schemas_are_openai_functions(store: SpaceStore) -> None:
     append = _tool(tools, "space_append")
     assert append.parameters["required"] == ["path", "text"]
     assert append.read_only is False
+    edit = _tool(tools, "space_edit")
+    assert edit.parameters["required"] == ["path", "old", "new"]
+    assert edit.read_only is False
+    delete = _tool(tools, "space_delete")
+    assert delete.parameters["required"] == ["path"]
+    assert delete.read_only is False
+    restore = _tool(tools, "space_restore")
+    assert restore.parameters["required"] == ["id"]
+    assert restore.read_only is False
+    assert _tool(tools, "space_trash").read_only is True
     assert _tool(tools, "space_list").read_only is True
