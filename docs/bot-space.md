@@ -1,6 +1,6 @@
 # bot_space 设计交接（Phase 2 已实现）
 
-> 状态：2026-11-05 已在 `D:\Dev\bot_space` 实现 v0.3.0（显示名「BOT空间」，十个工具、只读面板、回收站、测试、部署脚本）。
+> 状态：2026-11-05 已在 `D:\Dev\bot_space` 实现 v0.3.0（显示名「BOT空间」，十个工具、只读面板、回收站、测试、ZIP 安装）。
 > 手记**全局一份，不分群聊私聊**；插件侧不按 `is_group` 限制。主项目 `_tools_for` 已对所有会话暴露工具。
 > 部署与启用由使用者手动执行；本工作区只改插件仓库，不修改主项目、不自动写入
 > `qq-bot-lite\plugins\bot_space`。
@@ -109,7 +109,6 @@ bot_space（独立插件仓库）
   core/tools.py           工具 handler
   pages/index.html        只读面板
   tests/                  路径、配额、工具 schema
-  tools/deploy-to-bot.ps1 部署到主项目 plugins/bot_space
 ```
 
 原则：**主项目管协议和循环，插件管工具和存储。**
@@ -401,9 +400,9 @@ data/plugin_data/bot_space/
 2. `core/space.py`：路径、slug、配额、原子写、审计；纯逻辑测试。
 3. `core/tools.py` + `TOOLS`；工具 schema。
 4. `pages/index.html` 只读面板 + `router` GET。
-5. `tools/deploy-to-bot.ps1`，部署到 `plugins/bot_space`，写 `.deployed.json`。
+5. 手动打 ZIP（只含运行时文件），主面板「安装 ZIP」导入；不写部署脚本。
 6. 插件自检、pytest、ruff。
-7. 部署到主项目，启用，私聊/群聊实测：模型自己决定 list/read/append。
+7. 主面板安装 ZIP，启用，私聊/群聊实测：模型自己决定 list/read/edit/delete。
 8. 提交插件仓库；发布版本。
 
 ### Phase 3：L3
@@ -417,9 +416,11 @@ data/plugin_data/bot_space/
 ## 10. 新工作区约定
 
 - 插件源码：`D:\Dev\bot_space`（独立 git 仓库）。
-- 部署副本：`D:\Dev\qq-bot-lite\plugins\bot_space`，**不要直接改副本**。
+- 安装位置：`D:\Dev\qq-bot-lite\plugins\bot_space`，**不要直接改安装副本**。
+- 安装方式：用户手动打 ZIP（只含 `plugin.toml`、`plugin.py`、`core/`、`pages/`、README 等运行时文件），
+  在主面板「安装 ZIP」导入；**仓库不提供部署脚本，也不自动写主项目**。
 - 主项目核心改动：在 `D:\Dev\qq-bot-lite` 工作区做；插件工作区只依赖 `api=2` 契约，
-  不复制 `app/sdk.py`。**插件工作区不修改主项目任何文件；部署/更新由用户手动执行。**
+  不复制 `app/sdk.py`。**插件工作区不修改主项目任何文件；安装/更新由用户手动执行。**
 - 插件测试可以用主项目 venv：
 
 ```powershell
@@ -427,8 +428,6 @@ $env:PYTHONPATH = 'D:\Dev\qq-bot-lite'
 D:\Dev\qq-bot-lite\.venv\Scripts\python.exe -m pytest -q
 ```
 
-- 部署脚本 `tools/deploy-to-bot.ps1` 复刻 `whale_lexicon` 的做法，目标 `plugins\bot_space`，
-  排除 `tests/`、`tools/`、`.git`、缓存，写 `.deployed.json`；**由用户手动运行**。
 - 插件加载后默认**不启用**；主面板插件卡片手动打开。
 - 删除插件时用现有删除弹窗的「连数据一起删」清空空间。
 

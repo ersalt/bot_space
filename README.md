@@ -10,7 +10,7 @@ qq-bot-lite 的插件：**BOT空间**。bot 自己写、用户只读的 Markdown
 - 当前版本：`0.3.0`
 - 设计交接：[docs/bot-space.md](docs/bot-space.md)
 - 主项目放开群聊工具：[docs/host-group-tools.md](docs/host-group-tools.md)
-- 部署副本：`D:\Dev\qq-bot-lite\plugins\bot_space`，不要直接改副本
+- 安装位置：`D:\Dev\qq-bot-lite\plugins\bot_space`，不要直接改安装副本
 
 ---
 
@@ -92,28 +92,43 @@ qq-bot-lite 的插件：**BOT空间**。bot 自己写、用户只读的 Markdown
 
 ---
 
-## 3. 安装
+## 3. 安装（ZIP）
 
-开发仓库在 `D:\Dev\bot_space`，机器人实际加载的是部署副本：
+不使用部署脚本。手动打一个干净的 ZIP，在主面板「插件 → 安装 ZIP」导入。
 
-> 部署是**手动步骤**：本仓库的开发、测试和自检只改 `D:\Dev\bot_space`，
-> 不会写入主项目，也不会自动启用插件。
+### 打包
 
-```powershell
-# 同步到 D:\Dev\qq-bot-lite\plugins\bot_space
-powershell -ExecutionPolicy Bypass -File tools\deploy-to-bot.ps1
+只放运行时文件：
 
-# 先看会改什么
-powershell -ExecutionPolicy Bypass -File tools\deploy-to-bot.ps1 -DryRun
+```
+plugin.toml
+plugin.py
+core/
+pages/
+README.md
+CHANGELOG.md
+LICENSE
 ```
 
-然后到主面板「插件」页：
+不要放 `.git/`、`tests/`、`docs/`、`AGENTS.md`、`pytest.ini`、`ruff.toml`、`.github/` 和缓存。
+ZIP 支持两种结构，任选一种：
 
-1. 找到 **BOT空间**（id 是 `bot_space`），点开关启用（默认关闭）；
-2. 点「打开面板」查看手记；
-3. 如果之前已启用、只是更新了代码，点「重载」即可，不用重启机器人。
+- **根目录布局（推荐）**：ZIP 根目录直接是 `plugin.toml`；ZIP 文件名用 `bot_space.zip`，
+  安装器会用文件名作插件 id。
+- **文件夹布局**：ZIP 里第一层是 `bot_space/plugin.toml`，其余文件在 `bot_space/` 下。
 
-装完默认不启用：是否让模型拥有这个能力，由使用者决定。
+Windows 做法：打开 `D:\Dev\bot_space`，只选中上面这些文件/目录，
+右键「发送到 → 压缩(zipped)文件夹」，把生成的 ZIP 改名成 `bot_space.zip`。
+
+### 安装
+
+1. 主面板「插件」页先删除旧的 **BOT空间**（只删插件，保留数据；同名直接安装会 409）；
+2. 点「安装 ZIP」，拖入或选择 `bot_space.zip`；
+3. 安装后默认不启用，打开 **BOT空间** 的开关；
+4. 点「打开面板」，地址是 `/plugins/bot_space/`。
+
+`0.3.0` 没有新增 router 路由，一般安装后启用/重载即可。之前 `0.2.0` 的 `/trash`
+如果还没重启过，仍然需要重启一次进程才能挂上。
 
 ---
 
@@ -225,7 +240,6 @@ core/space.py      纯逻辑：路径、配额、原子写、审计、搜索
 core/tools.py      十个模型工具的 schema 与 handler
 pages/index.html   单文件只读面板（无构建链、无外部资源）
 tests/             路径安全、配额、工具、面板、清单
-tools/             部署脚本
 ```
 
 CI 在 `.github/workflows/ci.yml`：Ubuntu/Windows × Python 3.12/3.13，跑 ruff + pytest。

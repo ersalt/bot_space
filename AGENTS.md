@@ -5,11 +5,11 @@
 ## 这是什么
 
 qq-bot-lite 的独立插件仓库：**BOT空间**（id `bot_space`），bot 自己写、用户只读的
-Markdown 手记。插件只给模型工具，不给用户命令；面板只读。部署副本在
-`D:\Dev\qq-bot-lite\plugins\bot_space`，**不要直接改副本**。
+Markdown 手记。插件只给模型工具，不给用户命令；面板只读。安装位置在
+`D:\Dev\qq-bot-lite\plugins\bot_space`，**不要直接改安装副本**。
 
 **硬性规则：本工作区只改插件源码，不修改主项目、不部署、不启用插件。**
-部署/更新由用户手动运行 `tools/deploy-to-bot.ps1` 并在主面板操作。
+安装/更新由用户手动打 ZIP，在主面板「安装 ZIP」导入；不写部署脚本。
 
 - 仓库：`D:\Dev\bot_space`（独立 git）
 - 主项目：`D:\Dev\qq-bot-lite`
@@ -26,7 +26,6 @@ core/space.py      纯逻辑，不 import app.*：路径、配额、原子写、
 core/tools.py      十个模型工具的 schema 与 handler（只 import app.sdk）
 pages/index.html   单文件只读面板：文件树、Markdown 原文/预览、用量、审计、回收站
 tests/             conftest 在没有主项目时注入最小 app.sdk stub
-tools/deploy-to-bot.ps1
 ```
 
 ## 校验（改完必须跑）
@@ -38,13 +37,12 @@ D:\Dev\qq-bot-lite\.venv\Scripts\ruff.exe check .
 D:\Dev\qq-bot-lite\.venv\Scripts\python.exe -m app.pluginkit.check D:\Dev\bot_space
 ```
 
-部署（**用户手动执行，代理不要运行**）：
+安装（**用户手动打 ZIP，代理不要生成/执行部署脚本**）：
 
-```powershell
-powershell -ExecutionPolicy Bypass -File tools\deploy-to-bot.ps1
-```
-
-部署后由用户在主面板插件页启用/重载；`router` 和 `pages/` 的增删要重启进程才彻底生效。
+1. 只打运行时文件：`plugin.toml`、`plugin.py`、`core/`、`pages/`、`README.md`、
+   `CHANGELOG.md`、`LICENSE`；
+2. 主面板「插件」先删旧插件（保留数据），再「安装 ZIP」；
+3. 启用/重载；`router` 和 `pages/` 的增删要重启进程才彻底生效。
 
 ## 不能碰的设计
 

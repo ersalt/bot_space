@@ -2,6 +2,13 @@
 
 按 [Keep a Changelog](https://keepachangelog.com/zh-CN/1.1.0/) 记录；版本号语义化。
 
+## Unreleased
+
+### 变更
+
+- 仓库安装方式改为手动 ZIP：只打运行时文件，在主面板「安装 ZIP」导入。
+- 移除 `tools/deploy-to-bot.ps1`；运行时代码不变，版本仍是 0.3.0。
+
 ## 0.3.0 — 2026-11-05
 
 ### 新增
