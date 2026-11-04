@@ -1,0 +1,12 @@
+# 开发/测试产物；部署副本由 tools/deploy-to-bot.ps1 生成，不带这些
+__pycache__/
+*.pyc
+.pytest_cache/
+.ruff_cache/
+.venv/
+
+# 运行期数据不放在仓库里
+data/
+*.db
+*.db-wal
+*.db-shm
