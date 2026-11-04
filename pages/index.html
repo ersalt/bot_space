@@ -357,7 +357,7 @@
 <body>
 
 <header class="topbar">
-  <div class="brand">BOT空间 <span class="ver" id="brand-version">v0.4.0</span></div>
+  <div class="brand">BOT空间 <span class="ver" id="brand-version">v0.4.1</span></div>
   <span class="tb-sep"></span>
   <span class="tb-scope">手记</span>
   <div class="tb-right">
@@ -457,7 +457,7 @@
 
   <footer class="foot">
     <span>根目录 <code>data/plugin_data/bot_space/space</code></span>
-    <span>只读 · <span id="foot-version">v0.4.0</span></span>
+    <span>只读 · <span id="foot-version">v0.4.1</span></span>
   </footer>
 </main>
 
@@ -1046,13 +1046,18 @@ function renderTrash(items, total) {
 
 /* ---------- 主题 / 全屏 ---------- */
 
+const reducedMotion = () =>
+  Boolean(window.matchMedia && window.matchMedia("(prefers-reduced-motion: reduce)").matches);
+
 function applyTheme(theme) {
   const dark = theme === "dark";
   document.documentElement.setAttribute("data-theme", dark ? "dark" : "light");
   document.documentElement.classList.toggle("dark", dark);
   document.documentElement.style.colorScheme = dark ? "dark" : "light";
+  const meta = document.querySelector('meta[name="theme-color"]');
+  if (meta) meta.setAttribute("content", dark ? "#0a0f1a" : "#f9fcfe");
   $("theme-btn").textContent = dark ? "◑" : "◐";
-  const label = dark ? "切换到浅色" : "切换到深色";
+  const label = dark ? "切到浅色" : "切到深色";
   $("theme-btn").setAttribute("aria-label", label);
   $("theme-btn").title = label;
 }
@@ -1113,13 +1118,33 @@ $("filter").addEventListener("input", () => {
 });
 $("raw-btn").addEventListener("click", () => setMode("raw"));
 $("md-btn").addEventListener("click", () => setMode("preview"));
-$("theme-btn").addEventListener("click", () => {
+$("theme-btn").addEventListener("click", (event) => {
   const current = document.documentElement.getAttribute("data-theme");
   const next = current === "dark" ? "light" : "dark";
-  applyTheme(next);
+  const x = event.clientX ?? window.innerWidth / 2;
+  const y = event.clientY ?? 40;
+  const radius = Math.hypot(
+    Math.max(x, window.innerWidth - x),
+    Math.max(y, window.innerHeight - y),
+  );
+  const root = document.documentElement;
+  root.style.setProperty("--vt-x", `${x}px`);
+  root.style.setProperty("--vt-y", `${y}px`);
+  root.style.setProperty("--vt-r", `${radius}px`);
+
   try {
     localStorage.setItem("qqbotlite-theme", next);
   } catch (error) {}
+
+  if (typeof document.startViewTransition !== "function" || reducedMotion()) {
+    applyTheme(next);
+    return;
+  }
+  document.startViewTransition(() => applyTheme(next));
+  $("theme-btn").animate(
+    [{ transform: "rotate(0deg)" }, { transform: "rotate(180deg)" }],
+    { duration: 240, easing: "cubic-bezier(.22, 1.15, .36, 1)" },
+  );
 });
 $("full-btn").addEventListener("click", async () => {
   try {

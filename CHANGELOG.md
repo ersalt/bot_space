@@ -2,6 +2,15 @@
 
 按 [Keep a Changelog](https://keepachangelog.com/zh-CN/1.1.0/) 记录；版本号语义化。
 
+## 0.4.1 — 2026-11-05
+
+### 变更
+
+- 精简 system prompt：删除授权细节移到工具描述和第一次调用返回的 preview/token，
+  不再重复占 system token。
+- 主题切换对齐主项目：View Transition 圆形揭示 + 图标 240ms 旋转；
+  `prefers-reduced-motion` 时直接切换。
+
 ## 0.4.0 — 2026-11-05
 
 ### 新增

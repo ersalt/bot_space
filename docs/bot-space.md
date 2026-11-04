@@ -1,6 +1,6 @@
 # bot_space 设计交接（Phase 2 已实现）
 
-> 状态：2026-11-05 已在 `D:\Dev\bot_space` 实现 v0.4.0（显示名「BOT空间」，十个工具、只读面板、回收站、删除授权、测试、ZIP 安装）。
+> 状态：2026-11-05 已在 `D:\Dev\bot_space` 实现 v0.4.1（显示名「BOT空间」，十个工具、只读面板、回收站、删除授权、测试、ZIP 安装）。
 > 手记**全局一份，不分群聊私聊**；插件侧不按 `is_group` 限制。主项目 `_tools_for` 已对所有会话暴露工具。
 > 部署与启用由使用者手动执行；本工作区只改插件仓库，不修改主项目、不自动写入
 > `qq-bot-lite\plugins\bot_space`。
@@ -250,7 +250,7 @@ TOOLS = [
 api = 2
 title = "BOT空间"
 description = "模型自己决定写什么的 Markdown 手记；用户只读查看。"
-version = "0.4.0"
+version = "0.4.1"
 panel = "/plugins/bot_space"
 
 [[config]]
