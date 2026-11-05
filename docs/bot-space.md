@@ -1,6 +1,6 @@
 # bot_space 设计交接（Phase 2 已实现）
 
-> 状态：2026-11-05 已在 `D:\Dev\bot_space` 实现 v0.5.1（显示名「BOT空间」，十个工具、只读面板、回收站、删除/读取授权、测试、ZIP 安装）。
+> 状态：2026-11-05 已在 `D:\Dev\bot_space` 实现 v0.5.2（显示名「BOT空间」，十个工具、只读面板、回收站、删除/读取授权、测试、ZIP 安装）。
 > 手记**全局一份，不分群聊私聊**；插件侧不按 `is_group` 限制。主项目 `_tools_for` 已对所有会话暴露工具。
 > 部署与启用由使用者手动执行；本工作区只改插件仓库，不修改主项目、不自动写入
 > `qq-bot-lite\plugins\bot_space`。
@@ -107,7 +107,7 @@ bot_space（独立插件仓库）
   plugin.py               setup(ctx), TOOLS, router
   core/space.py           路径/配额/原子写/审计（纯逻辑，不 import app.*）
   core/tools.py           工具 handler
-  pages/index.html        只读面板
+  pages/index.html        只读面板 + 设置弹窗
   tests/                  路径、配额、工具 schema
 ```
 
@@ -262,7 +262,7 @@ TOOLS = [
 api = 2
 title = "BOT空间"
 description = "模型自己决定写什么的 Markdown 手记；用户只读查看。"
-version = "0.5.1"
+version = "0.5.2"
 panel = "/plugins/bot_space"
 
 [[config]]
@@ -327,14 +327,16 @@ data/plugin_data/bot_space/
 - 单文件 64KB（可配）、总文件 200、总量 10MB（可配，均含回收站）；超出返回明确错误给模型。
 - 读结果、搜索结果都设上限，避免把上下文撑爆。
 
-### 5.4 只读面板
+### 5.4 只读面板（设置除外）
 
-- `pages/index.html`：左侧文件树，右侧 Markdown 原文/预览，顶部显示用量、回收站和审计入口。
+- `pages/index.html`：左侧文件树，右侧 Markdown 原文/预览，顶部显示用量、回收站、审计和设置入口。
 - 回收站弹窗只读列出被删除文件；恢复/永久删除由模型调用 `space_restore` / `space_purge`，
   面板不提供写按钮。
-- 只读：没有编辑框、没有新建/删除按钮、没有「让 bot 写」的触发。
-- 可以显示「这是 bot 的手记；要清空请到插件卡片删除数据」。
-- 面板接口全部 GET；不要提供 POST 写接口，减少误用面。
+- 手记内容只读：没有编辑框、没有新建/删除按钮、没有「让 bot 写」的触发。
+- 右上角设置弹窗通过宿主 `/api/plugins/bot_space/settings` 编辑插件设置（写权限、自主权、
+  配额、读取条数），不直接读写手记。
+- 弹窗打开/关闭都有动画；`prefers-reduced-motion` 时直接开关。
+- 插件自己的 `router` 接口全部 GET；设置保存走宿主接口，不新增插件写接口。
 - 主题继续跟主面板 `data-theme` / `.dark` 走；组件用 Basecoat；下拉如果要用，用主面板的 `uiSelect`（参考 `docs/ui-spec.md`）。
 
 ### 5.5 审计

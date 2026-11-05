@@ -7,7 +7,7 @@ qq-bot-lite 的插件：**BOT空间**。bot 自己写、用户只读的 Markdown
 没有 `/space` 命令，没有编辑按钮，也没有「让 bot 写一条」的触发。
 
 - 插件接口：`api = 2`（需要 qq-bot-lite 的原生工具协议，>= 0.2.0）
-- 当前版本：`0.5.1`
+- 当前版本：`0.5.2`
 - 设计交接：[docs/bot-space.md](docs/bot-space.md)
 - 主项目放开群聊工具：[docs/host-group-tools.md](docs/host-group-tools.md)
 - 安装位置：`D:\Dev\qq-bot-lite\plugins\bot_space`，不要直接改安装副本
@@ -146,7 +146,7 @@ token 绑定会话和操作，15 分钟过期。token 只是操作确认凭证�
 输出：
 
 ```text
-D:\Dev\bot_space-0.5.1.zip
+D:\Dev\bot_space-0.5.2.zip
 ```
 
 ZIP 顶层是项目文件夹名/插件 id，解压/安装不会把文件散到根目录。
@@ -186,11 +186,11 @@ ZIP 支持两种结构，任选一种：
 ### 安装
 
 1. 主面板「插件」页先删除旧的 **BOT空间**（只删插件，保留数据；同名直接安装会 409）；
-2. 点「安装 ZIP」，拖入或选择 `D:\Dev\bot_space-0.5.1.zip`；
+2. 点「安装 ZIP」，拖入或选择 `D:\Dev\bot_space-0.5.2.zip`；
 3. 安装后默认不启用，打开 **BOT空间** 的开关；
 4. 点「打开面板」，地址是 `/plugins/bot_space/`。
 
-`0.5.1` 没有新增 router 路由，一般安装后启用/重载即可。之前 `0.2.0` 的 `/trash`
+`0.5.2` 没有新增 router 路由，一般安装后启用/重载即可。之前 `0.2.0` 的 `/trash`
 如果还没重启过，仍然需要重启一次进程才能挂上。
 
 ---
@@ -243,7 +243,9 @@ data/plugin_data/bot_space/
 - 「回收站」弹窗只读列出被删除的文件；恢复或永久删除由模型调用
   `space_restore` / `space_purge`；
 - 「审计」弹窗查看最近 50 条工具调用；
-- **全部接口 GET**，没有编辑、新建、删除、触发按钮。
+- 右上角「设置」弹窗编辑插件设置（写权限、自主权说明、配额、读取条数），走主程序
+  `/api/plugins/bot_space/settings`，不修改手记内容；
+- 手记内容接口**全部 GET**，没有编辑、新建、删除、触发按钮。
 
 接口：
 

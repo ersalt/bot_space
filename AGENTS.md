@@ -59,7 +59,8 @@ D:\Dev\qq-bot-lite\.venv\Scripts\python.exe -m app.pluginkit.check D:\Dev\bot_sp
    `.trash/<id>/`，`space_restore` 可恢复，`space_purge` 才永久删除回收站条目。
    修改用 `space_edit`，不要用 append 追加“更正”。
 3. **根目录固定** `ctx.data_dir / "space"`，不接受任意绝对路径；路径必须过 `normalize_path`。
-4. **面板只读。** 所有接口 GET；不加编辑框、新建、删除、触发按钮。
+4. **面板只读，设置除外。** 手记内容接口全部 GET；右上角设置弹窗通过主程序
+   `/api/plugins/bot_space/settings` 改插件设置，不直接改手记。不加编辑框、新建、删除、触发按钮。
 5. **手记只有一份，不分群聊私聊。** 插件不按 `is_group` 限制，私聊/群里读写同一个根目录；
    主项目 `_tools_for` 已对所有会话暴露工具，不要再把群聊滤掉。
 6. **原子写**：同目录临时文件 + `os.replace`；同一路径 `asyncio.Lock` 串行。

@@ -2,6 +2,18 @@
 
 按 [Keep a Changelog](https://keepachangelog.com/zh-CN/1.1.0/) 记录；版本号语义化。
 
+## 0.5.2 — 2026-11-05
+
+### 新增
+
+- 面板顶栏增加「设置」按钮和设置弹窗，编辑 `allow_write`、`autonomy_guard`、
+  配额、`read_chars`、`search_hits`；走宿主 `/api/plugins/bot_space/settings`。
+
+### 修复
+
+- 审计/回收站/设置弹窗支持关闭动画；Esc、点遮罩、取消/关闭按钮统一走
+  `closeMask()`，`prefers-reduced-motion` 时直接关闭。
+
 ## 0.5.1 — 2026-11-05
 
 ### 变更
