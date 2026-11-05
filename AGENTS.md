@@ -95,3 +95,5 @@ D:\Dev\qq-bot-lite\.venv\Scripts\python.exe -m pytest tests -q
 - 配额改设置后下一轮生效；`ToolRunner` 有 10 秒工具超时，保持文件操作同步且短。
 - 面板复用主项目 `.topbar/.page/.head/.card/.modal/.md-body` 与 `/static/theme.css`、`style.css`；
   宿主样式变更会影响插件面板。要局部覆盖先按 `docs/plugin-integration.md` 发交接。
+- 弹窗退场复用宿主 `.modal[open].is-closing` / `dialog-out`；`closeMask()` 是 **host-gap**，
+  因为插件页没加载 `plugins.js`，等 `ui.js` 通用 helper 落地后替换。
