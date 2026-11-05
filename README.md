@@ -8,15 +8,15 @@ qq-bot-lite 的插件：**BOT空间**。bot 自己写、用户只读的 Markdown
 
 - 插件接口：`api = 2`（需要 qq-bot-lite 的原生工具协议，>= 0.2.0）
 - 当前版本：`0.5.2`
-- 设计交接：[docs/bot-space.md](docs/bot-space.md)
-- 主项目放开群聊工具：[docs/host-group-tools.md](docs/host-group-tools.md)
-- 安装位置：`D:\Dev\qq-bot-lite\plugins\bot_space`，不要直接改安装副本
+- 内置位置：`plugins/bot_space/`，随主仓库分发的完整副本（含 tests/docs）；默认启用
+- 主要开发在插件自己的项目里进行，完成后同步到主仓库副本
+- 用户文档：本 README；完整设置说明见主项目 `docs/guide.md` 的「内置插件」
 
 ---
 
 ## 1. bot 现在能做什么
 
-在任何会话里，bot 都可以这样用手记（部署、启用，并且宿主把工具交给该会话后生效）：
+在任何会话里，bot 都可以这样用手记（插件启用、宿主把工具交给该会话后生效）：
 
 - **翻手记**：先 `space_list` 看有哪些文件、标题、大小和修改时间，再决定读哪篇；
 - **读一篇**：`space_read` 读取 Markdown 原文，长文用 `offset` 分页；
@@ -39,7 +39,7 @@ qq-bot-lite 的插件：**BOT空间**。bot 自己写、用户只读的 Markdown
 **是否调用、写什么、写哪里，都由模型自己判断**；插件不追问、不自动补写，也不主动发 QQ。
 
 > 宿主应把工具交给当前会话；如果群聊里模型拿不到工具，检查主项目 `_tools_for`。
-> 老版本只给私聊，见 [docs/host-group-tools.md](docs/host-group-tools.md)。
+> 老版本只给私聊；当前版本已对所有会话开放。
 
 目前**不能**：直接永久删除活跃文件（要先 `space_delete` 再 `space_purge`）、重命名、移动、
 读非 `.md` 文件、读任意目录、执行 shell、联网。
@@ -116,82 +116,16 @@ token 绑定会话和操作，15 分钟过期。token 只是操作确认凭证�
 
 ---
 
-## 3. 打包 / 安装
+## 3. 内置与更新
 
-单文件工具目前放在 **`D:\Dev\拖拽打包.cmd`**（共享工具，不在本插件仓库）。
-它可以复制到任何地方，不依赖仓库里的其它脚本。
+本插件是 qq-bot-lite 的内置插件，主仓库 `plugins/bot_space/` 是随项目分发的完整副本
+（含 tests/docs，方便学习）；主要开发仍在插件自己的项目里进行。
 
-- 把任意项目文件夹拖到它上面；
-- 输出到 **工具所在目录**，和 `.cmd` 同级，不是被拖项目的目录；
-- 双击会打包工具自己所在的目录，所以放在 `D:\Dev` 时请拖项目，不要双击。
-
-它会自动判断两种模式：
-
-- **插件模式**：文件夹里有 `plugin.toml` 和 `plugin.py`（qq-bot-lite 插件）。
-  按 git/默认排除收运行时文件，版本号从 `plugin.toml` 读；有 `id` 时用 `id` 作 ZIP 顶层目录，
-  没有就用文件夹名。
-- **通用模式**：其他项目。
-  - 如果文件夹是 git 仓库，直接调用
-    `git ls-files --cached --others --exclude-standard`，自动遵守 `.gitignore`
-    （包括嵌套 `.gitignore` 和全局 git 排除规则）。
-  - 不是 git 仓库时，退回默认排除和 `.packageignore`；不再解析 `.gitignore`，
-    因为没有 git 时它没有实际执行者。
-  - 两种情况都会再叠加打包专用排除：`.git`、`.github`、`.venv`、`node_modules`、
-    `dist`、`build`、`logs`、`tests`、`docs`、`tools`、缓存和临时文件。
-  - 版本号优先读 `VERSION`，没有就用时间戳。
-
-> `.gitignore` 不是打包清单：它只管 git 未跟踪文件。已经被 git 跟踪的 `tests/`、`docs/`
-> 仍会出现在 `git ls-files` 里，所以打包工具还会按上面的规则把它们排掉。
-
-输出：
-
-```text
-D:\Dev\bot_space-0.5.2.zip
-```
-
-ZIP 顶层是项目文件夹名/插件 id，解压/安装不会把文件散到根目录。
-
-通用模式如果还要排除更多文件，在项目根目录放一个 `.packageignore`，一行一个规则，支持
-`*` 通配和 `目录/`：
-
-```text
-secret.txt
-*.log
-assets/cache/
-```
-
-工具用 Windows 自带的 PowerShell 和 `Compress-Archive`，不需要 Python，也不需要安装依赖。
-
-### 手动打包（备用）
-
-只放运行时文件：
-
-```
-plugin.toml
-plugin.py
-core/
-pages/
-README.md
-CHANGELOG.md
-LICENSE
-```
-
-不要放 `.git/`、`tests/`、`docs/`、`AGENTS.md`、`pytest.ini`、`ruff.toml`、`.github/` 和缓存。
-ZIP 支持两种结构，任选一种：
-
-- **根目录布局**：ZIP 根目录直接是 `plugin.toml`；ZIP 文件名用 `bot_space.zip`，
-  安装器会用文件名作插件 id。
-- **文件夹布局**：ZIP 里第一层是 `bot_space/plugin.toml`，其余文件在 `bot_space/` 下。
-
-### 安装
-
-1. 主面板「插件」页先删除旧的 **BOT空间**（只删插件，保留数据；同名直接安装会 409）；
-2. 点「安装 ZIP」，拖入或选择 `D:\Dev\bot_space-0.5.2.zip`；
-3. 安装后默认不启用，打开 **BOT空间** 的开关；
-4. 点「打开面板」，地址是 `/plugins/bot_space/`。
-
-`0.5.2` 没有新增 router 路由，一般安装后启用/重载即可。之前 `0.2.0` 的 `/trash`
-如果还没重启过，仍然需要重启一次进程才能挂上。
+- **更新**：插件项目改完后同步到 `plugins/bot_space/`，重启机器人（或插件页重载）生效。
+- **数据**：仍在 `data/plugin_data/bot_space/space/`，不受更新影响。
+- **默认状态**：`config.example.toml` 默认启用；已有配置可以在主面板「插件」页开关。
+- **测试**：`python -m pytest plugins/bot_space/tests -q`。
+- **面板**：主面板「插件」→ BOT空间 → 打开面板，或直接访问 `/plugins/bot_space/`。
 
 ---
 
@@ -282,19 +216,16 @@ data/plugin_data/bot_space/
 
 ## 8. 开发与测试
 
-用主程序同一个 venv（插件只依赖主程序已装的包 + 标准库）：
+用主程序同一个 venv（插件只依赖主程序已装的包 + 标准库），在主项目根目录执行：
 
 ```powershell
-$env:PYTHONPATH = 'D:\Dev\qq-bot-lite'
-D:\Dev\qq-bot-lite\.venv\Scripts\python.exe -m pytest tests -q
-D:\Dev\qq-bot-lite\.venv\Scripts\ruff.exe check .
-D:\Dev\qq-bot-lite\.venv\Scripts\python.exe -m app.pluginkit.check D:\Dev\bot_space
+.venv\Scripts\python.exe -m pytest plugins/bot_space/tests -q
+.venv\Scripts\ruff.exe check plugins/bot_space
+.venv\Scripts\python.exe -m app.pluginkit.check plugins/bot_space
 ```
 
-部署后的副本自检由用户在自己的机器人工作区执行。
-
-如果主项目不在 `PYTHONPATH`，`tests/conftest.py` 会注入一个最小的 `app.sdk` stub，
-所以 `pytest tests` 也能单独跑；部署时用的仍是真实 SDK。
+`tests/conftest.py` 会优先用主项目真实的 `app.sdk`；脱离主项目单独跑测试时会注入最小的
+`app.sdk` stub，所以同一套测试在两种布局下都能跑。
 
 目录：
 
@@ -307,7 +238,8 @@ pages/index.html   单文件只读面板（无构建链、无外部资源）
 tests/             路径安全、配额、工具、面板、清单
 ```
 
-CI 在 `.github/workflows/ci.yml`：Ubuntu/Windows × Python 3.12/3.13，跑 ruff + pytest。
+主项目 CI `.github/workflows/ci.yml` 会跑主测试和两个内置插件的测试；插件不再单独维护
+GitHub Actions。
 
 ---
 
@@ -335,8 +267,7 @@ CI 在 `.github/workflows/ci.yml`：Ubuntu/Windows × Python 3.12/3.13，跑 ruf
 - 需要 qq-bot-lite 的原生工具协议（`app/sdk.py` 的 `Tool`/`ToolContext`、
   `app/core/tool_runner.py`、`LLMClient.complete_message`）。
 - 手记只有一份，不分群聊私聊；插件不按 `is_group` 限制。
-- 宿主需要把工具交给当前会话；老版本只在私聊暴露，改法见
-  [docs/host-group-tools.md](docs/host-group-tools.md)。
+- 宿主需要把工具交给当前会话；老版本只在私聊暴露，当前版本已对所有会话开放。
 
 ---
 

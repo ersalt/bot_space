@@ -4,52 +4,45 @@
 
 ## 这是什么
 
-qq-bot-lite 的独立插件仓库：**BOT空间**（id `bot_space`），bot 自己写、用户只读的
-Markdown 手记。插件只给模型工具，不给用户命令；面板只读。安装位置在
-`D:\Dev\qq-bot-lite\plugins\bot_space`，**不要直接改安装副本**。
+qq-bot-lite 的插件：**BOT空间**（id `bot_space`），bot 自己写、用户只读的 Markdown 手记。
+插件只给模型工具，不给用户命令；面板只读。
 
-**硬性规则：本工作区只改插件源码，不修改主项目、不部署、不启用插件。**
-安装/更新由用户手动打 ZIP，在主面板「安装 ZIP」导入；不写部署脚本。
+本仓库是**插件开发源**；主项目 `D:\Dev\qq-bot-lite\plugins\bot_space` 是完整内置副本
+（含 tests/docs）。主要开发在本仓库；完成后把运行时源码 + tests + docs 同步到主项目副本。
+
+**不要直接改主项目。** 宿主缺能力先写 HOST-REQUEST，交给用户转给主项目 Agent。
+协作规则见主项目 `docs/plugin-integration.md`，宿主 API 见 `docs/plugin.md`，UI 见 `docs/ui-spec.md`。
 
 - 仓库：`D:\Dev\bot_space`（独立 git）
 - 主项目：`D:\Dev\qq-bot-lite`
-- 接口契约：主项目 `docs/plugin.md`，`api = 2`
-- 设计交接：本仓库 `docs/bot-space.md`
-- 群聊工具的主项目改动说明：`docs/host-group-tools.md`
+- 接口契约：`api = 2`
+- 设计记录：本仓库 `docs/bot-space.md`（内部设计，不是用户手册）
 
 ## 目录
 
-```
+```text
 plugin.toml        清单 + 设置项（不导入代码就能读）
 plugin.py          setup / tools() / 只读面板 GET 路由
 core/space.py      纯逻辑，不 import app.*：路径、配额、原子写、审计、搜索、回收站
 core/tools.py      十个模型工具的 schema 与 handler（只 import app.sdk）
 pages/index.html   单文件只读面板：文件树、Markdown 原文/预览、用量、审计、回收站
 tests/             conftest 在没有主项目时注入最小 app.sdk stub
+docs/              设计记录（内部）
 ```
 
-打包工具不在本仓库：`D:\Dev\拖拽打包.cmd`。
+不再需要打包 ZIP、安装脚本或部署脚本。主项目默认启用；更新时同步副本并重启/重载。
 
 ## 校验（改完必须跑）
 
 ```powershell
-$env:PYTHONPATH = 'D:\Dev\qq-bot-lite'
+# 在主项目根目录，跑内置副本
+.venv\Scripts\python.exe -m pytest plugins/bot_space/tests -q
+.venv\Scripts\ruff.exe check plugins/bot_space
+.venv\Scripts\python.exe -m app.pluginkit.check plugins/bot_space
+
+# 或在插件仓库里（用主项目 venv）
 D:\Dev\qq-bot-lite\.venv\Scripts\python.exe -m pytest tests -q
-D:\Dev\qq-bot-lite\.venv\Scripts\ruff.exe check .
-D:\Dev\qq-bot-lite\.venv\Scripts\python.exe -m app.pluginkit.check D:\Dev\bot_space
 ```
-
-安装（**用户手动打 ZIP，代理不要生成/执行部署脚本**）：
-
-用 **`D:\Dev\拖拽打包.cmd`** 拖项目文件夹，或把它复制到项目里再双击。
-输出到工具所在目录，和 `.cmd` 同级，不是被拖项目的目录；主面板「安装 ZIP」导入。
-
-- 文件夹里有 `plugin.toml` + `plugin.py` → 插件模式，按 git/默认排除收运行时文件；
-  有 `id` 用 `id` 作顶层目录，否则用文件夹名；
-- 其它项目 → 通用模式；git 仓库会调用 `git ls-files --cached --others --exclude-standard`
-  遵守 `.gitignore`，再叠加默认打包排除；非 git 仓库退回默认排除和 `.packageignore`。
-
-仓库不放打包工具，也不写部署/启用脚本。
 
 ## 不能碰的设计
 
@@ -59,10 +52,10 @@ D:\Dev\qq-bot-lite\.venv\Scripts\python.exe -m app.pluginkit.check D:\Dev\bot_sp
    `.trash/<id>/`，`space_restore` 可恢复，`space_purge` 才永久删除回收站条目。
    修改用 `space_edit`，不要用 append 追加“更正”。
 3. **根目录固定** `ctx.data_dir / "space"`，不接受任意绝对路径；路径必须过 `normalize_path`。
-4. **面板只读，设置除外。** 手记内容接口全部 GET；右上角设置弹窗通过主程序
+4. **面板只读，设置除外。** 手记内容接口全部 GET；设置弹窗通过主程序
    `/api/plugins/bot_space/settings` 改插件设置，不直接改手记。不加编辑框、新建、删除、触发按钮。
 5. **手记只有一份，不分群聊私聊。** 插件不按 `is_group` 限制，私聊/群里读写同一个根目录；
-   主项目 `_tools_for` 已对所有会话暴露工具，不要再把群聊滤掉。
+   主项目工具对所有会话暴露，不要再把群聊滤掉。
 6. **原子写**：同目录临时文件 + `os.replace`；同一路径 `asyncio.Lock` 串行。
 7. **审计不记正文**：只记工具名、路径、字数、成败、会话键；日志也不打完整内容。
 8. **不引入依赖**：只用标准库 + 主程序已装的包；面板不引 CDN/外部字体/图标库。
@@ -100,3 +93,5 @@ D:\Dev\qq-bot-lite\.venv\Scripts\python.exe -m app.pluginkit.check D:\Dev\bot_sp
 - Windows 保留名、结尾空格/点、符号链接/junction 都有测试，改路径逻辑先跑 `test_space.py`。
 - 面板的 Markdown 渲染先 `escapeHtml` 再拼块；链接只放行 `http(s)`，不加载图片。
 - 配额改设置后下一轮生效；`ToolRunner` 有 10 秒工具超时，保持文件操作同步且短。
+- 面板复用主项目 `.topbar/.page/.head/.card/.modal/.md-body` 与 `/static/theme.css`、`style.css`；
+  宿主样式变更会影响插件面板。要局部覆盖先按 `docs/plugin-integration.md` 发交接。

@@ -1,14 +1,11 @@
 # bot_space 设计交接（Phase 2 已实现）
 
-> 状态：2026-11-05 已在 `D:\Dev\bot_space` 实现 v0.5.2（显示名「BOT空间」，十个工具、只读面板、回收站、删除/读取授权、测试、ZIP 安装）。
+> 状态：v0.5.2，已是 qq-bot-lite 的**内置插件**，源码在 `qq-bot-lite/plugins/bot_space/`，
+> 随主仓库跟踪和测试，不再维护独立部署副本。
 > 手记**全局一份，不分群聊私聊**；插件侧不按 `is_group` 限制。主项目 `_tools_for` 已对所有会话暴露工具。
-> 部署与启用由使用者手动执行；本工作区只改插件仓库，不修改主项目、不自动写入
-> `qq-bot-lite\plugins\bot_space`。
-> 主项目：`D:\Dev\qq-bot-lite`（只读依赖，仅作项目用途）。
-> 2026-11-04：Phase 1 核心工具协议已在主项目落地（`complete_message` / `Tool` /
-> `ToolRunner` / `api=2`）。
-> 这页保留「为什么做、做成什么样、哪些不能做」；实现细节以本仓库 `README.md` 为准，
+> 这页保留「为什么做、做成什么样、哪些不能做」；安装/使用细节以 `README.md` 为准，
 > 接口契约以主项目 `docs/plugin.md` 为准，冲突先改文档再改代码。
+> 下面的“独立仓库 / 手动打包 / ZIP 安装 / 跨工作区”是历史实现记录，内置化后不再适用。
 
 ---
 
@@ -26,7 +23,7 @@
 
 qq-bot-lite 的定位是本地轻量 QQ 机器人：OneBot 11 + FastAPI + SQLite + 本机 LM Studio。
 主项目只保留内核能力（消息、上下文、模型、回复、插件宿主、设置面板），功能尽量插件化。
-插件源码在独立仓库，部署副本放 `plugins/<id>/`；主仓库 `.gitignore` 已忽略部署副本。
+内置插件源码直接放在主仓库 `plugins/<id>/`，随主仓库跟踪；不再有独立部署副本。
 
 ### 1.2 讨论结论
 
@@ -36,8 +33,8 @@ qq-bot-lite 的定位是本地轻量 QQ 机器人：OneBot 11 + FastAPI + SQLite
 - **固定根目录。** 工具只能写 `ctx.data_dir / "space"` 里面的 `.md`，防止误伤项目其他文件。
 - **不做用户命令。** 不打 `/space ...`。手记是 bot 的，是否记录由模型决定；
   用户最多在插件面板只读查看，不提供「让它写」的按钮。
-- **存储放插件数据。** `data/plugin_data/bot_space/`，默认关闭；删除插件时现有弹窗的
-  「连数据一起删」就是生命周期开关。其他用户不喜欢可以直接删干净。
+- **存储放插件数据。** `data/plugin_data/bot_space/`，默认启用；删除插件时现有弹窗的
+  「连数据一起删」就是生命周期开关。其他用户不喜欢可以直接删干净或关闭插件。
 - **原生工具调用。** 不自己发明 slash command 协议；走 OpenAI 兼容的
   `tools` / `tool_calls` / `role=tool` 循环，和行业主流一致。
 - **通用协议进 SDK，具体工具进插件。** 不要把 `space_list/read/append` 塞进主项目核心；
@@ -75,7 +72,7 @@ qq-bot-lite 的定位是本地轻量 QQ 机器人：OneBot 11 + FastAPI + SQLite
 - 模型可以在会话里自己决定：查看手记、读某篇笔记、搜索、创建、追加。
 - 工具权限是一张显式的表；移除表项就移除能力，未知工具直接拒绝。
 - 固定根目录 + 路径清洗 + 配额 + 原子写 + 审计。
-- 插件默认关闭；删除插件数据即清空手记，不污染主项目。
+- 插件默认启用；删除插件数据即清空手记，不污染主项目。
 - 给其他插件开发者一份可复用的工具协议示例。
 
 ### 非目标
@@ -431,22 +428,12 @@ data/plugin_data/bot_space/
 
 ---
 
-## 10. 新工作区约定
+## 10. 内置后的约定
 
-- 插件源码：`D:\Dev\bot_space`（独立 git 仓库）。
-- 安装位置：`D:\Dev\qq-bot-lite\plugins\bot_space`，**不要直接改安装副本**。
-- 安装方式：用户手动打 ZIP（只含 `plugin.toml`、`plugin.py`、`core/`、`pages/`、README 等运行时文件），
-  在主面板「安装 ZIP」导入；**仓库不提供部署脚本，也不自动写主项目**。
-- 主项目核心改动：在 `D:\Dev\qq-bot-lite` 工作区做；插件工作区只依赖 `api=2` 契约，
-  不复制 `app/sdk.py`。**插件工作区不修改主项目任何文件；安装/更新由用户手动执行。**
-- 插件测试可以用主项目 venv：
-
-```powershell
-$env:PYTHONPATH = 'D:\Dev\qq-bot-lite'
-D:\Dev\qq-bot-lite\.venv\Scripts\python.exe -m pytest -q
-```
-
-- 插件加载后默认**不启用**；主面板插件卡片手动打开。
+- 插件源码：`plugins/bot_space/`，随主仓库跟踪；不要再建外部部署副本。
+- 启用/停用：主面板「插件」页；`config.example.toml` 默认启用。
+- 测试：在主项目根目录跑 `pytest plugins/bot_space/tests -q`；CI 会跑同一套。
+- 主项目核心改动直接在主仓库做；插件仍然只依赖 `app.sdk` 的 `api=2` 契约。
 - 删除插件时用现有删除弹窗的「连数据一起删」清空空间。
 
 ---
@@ -475,7 +462,7 @@ D:\Dev\qq-bot-lite\.venv\Scripts\python.exe -m pytest -q
 - 面板是否只读（当前设计是只读；删除数据走宿主生命周期）。
 - 是否允许模型 `space_create` 任意标题，还是只允许 `space_append` 当天 journal/固定文件。
 - 已定：手记全局一份，不分群聊私聊；宿主群聊暴露策略待主项目手动放开
-  （见 `docs/host-group-tools.md`）。
+  （主项目已对所有会话开放工具）。
 - L3 的触发时间、每日预算、是否需要主动摘要（v1 建议不需要）。
 - 工具名是否统一 `space_` 前缀；宿主重名时报错还是自动加插件前缀。
 - `api=2` 的兼容策略：支持 `api<=2`，旧插件不强制升级。
