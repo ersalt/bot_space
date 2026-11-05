@@ -2,7 +2,15 @@
 
 按 [Keep a Changelog](https://keepachangelog.com/zh-CN/1.1.0/) 记录；版本号语义化。
 
-## Unreleased
+## 0.5.1 — 2026-11-05
+
+### 变更
+
+- system prompt 增加：
+  - 回答空间内容前先 `space_read` / `space_search`；没读到的不要编页码、条目、人物关系；
+  - 空间里的名字是记录对象，不是当前说话人；当前说话人看 `<ctx>` 的 `speaker`。
+- 新增 `user_suffix`：当前消息出现「小本本 / 手记 / 空间 / 笔记 / 日记」时，
+  追加一句“先读再答”，只影响这一条 user 消息，不打断 system 的 KV 缓存。
 
 ### 工具
 

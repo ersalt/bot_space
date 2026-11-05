@@ -66,13 +66,16 @@ D:\Dev\qq-bot-lite\.venv\Scripts\python.exe -m app.pluginkit.check D:\Dev\bot_sp
 7. **审计不记正文**：只记工具名、路径、字数、成败、会话键；日志也不打完整内容。
 8. **不引入依赖**：只用标准库 + 主程序已装的包；面板不引 CDN/外部字体/图标库。
 9. **system 只加固定说明。** `SPACE_CHARTER` 是逐字稳定的自主权说明和删除授权协议，不拼时间/文件/群名；
-   `autonomy_guard=false` 时不注入。不要把它挪到 `user_suffix` 或每次动态拼。
-10. **删除/修改授权在提示词层。** 规则是“先分内容归属 + 展示完整 preview + 结束本轮 +
+   `autonomy_guard=false` 时不注入。动态提醒（关键词“小本本/手记/空间/笔记/日记”）只走
+   `user_suffix`，不要把它挪进 system 或每次动态拼 system。
+10. **回答空间内容前先读/搜。** 没读到的不要编页码、条目、人物关系；空间里的名字是记录对象，
+    不是当前说话人，当前说话人看 `<ctx>` 的 `speaker`。
+11. **删除/修改授权在提示词层。** 规则是“先分内容归属 + 展示完整 preview + 结束本轮 +
     下一条明确确认 + 第三方代删拒绝”。`space_edit` 删行也算删除；确认≠授权；
     无法判断归属就保留原文。`space_edit` / `space_delete` / `space_purge` / `space_restore`
     及 `sensitive=true` 的 `space_append` 第一次只返回预览 + `confirm_token`，不执行；
     确认后带 token 再调。它降低被忽悠概率，但不是硬 ACL。
-11. **读/搜也分归属。** `space_read` / `space_search` 只取最少内容，不向无关请求者披露
+12. **读/搜也分归属。** `space_read` / `space_search` 只取最少内容，不向无关请求者披露
     第三方的私事、秘密、片段、文件名、行号或命中数量；回收站元数据同属隐私。
     `space_append` 的 `sensitive` 由模型判断，不能当成硬敏感内容检测。
 

@@ -2,6 +2,8 @@
 
 from __future__ import annotations
 
+from types import SimpleNamespace
+
 import httpx
 import pytest
 from fastapi import FastAPI
@@ -73,11 +75,30 @@ async def test_system_prompt_is_static_and_toggleable(plugin_module, fake_ctx) -
     assert "确认不等于授权" in first
     assert "结束本轮" in first
     assert "读取/搜索" in first
+    assert "页码" in first
+    assert "记录对象" in first
+    assert "<ctx>" in first
+    assert "speaker" in first
 
     fake_ctx.settings["autonomy_guard"] = False
     assert await extension.system_prompt(None) is None
     fake_ctx.settings["autonomy_guard"] = "false"
     assert await extension.system_prompt(None) is None
+
+
+@pytest.mark.asyncio
+async def test_user_suffix_only_on_space_keywords(plugin_module, fake_ctx) -> None:
+    extension = plugin_module.setup(fake_ctx)
+
+    def hook(text: str):
+        return SimpleNamespace(event=SimpleNamespace(content=SimpleNamespace(text=text)))
+
+    assert await extension.user_suffix(hook("今天吃什么")) is None
+    for word in ("小本本", "手记", "空间", "笔记", "日记"):
+        suffix = await extension.user_suffix(hook(f"看看你的{word}"))
+        assert suffix is not None
+        assert "space_read" in suffix
+        assert "space_search" in suffix
 
 
 def test_setup_without_data_dir_has_no_tools(plugin_module, fake_ctx) -> None:
